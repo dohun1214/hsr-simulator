@@ -34,6 +34,9 @@ class BattleConfig:
     max_turns: int = 500
     starting_skill_points: int = STARTING_SKILL_POINTS
     max_skill_points: int = MAX_SKILL_POINTS
+    #: DoT 가 부여 시점의 시전자 스탯을 고정할지 여부.
+    #: 자료로 확인되지 않아 두 방식을 모두 지원한다. docs/mechanics.md 5.6
+    dot_snapshot: bool = True
 
 
 @dataclass
@@ -45,6 +48,9 @@ class BattleState:
     #: 아군 파티 공유 스킬 포인트. 근거: docs/mechanics.md 3.1
     skill_points: int = 3
     max_skill_points: int = 5
+
+    #: 상태 효과 부여 순번 카운터 (DoT 처리 순서용)
+    effect_seq: int = 0
 
     elapsed_av: float = 0.0
     cycle: int = 1
@@ -94,6 +100,7 @@ class BattleState:
             order=list(self.order),
             skill_points=self.skill_points,
             max_skill_points=self.max_skill_points,
+            effect_seq=self.effect_seq,
             elapsed_av=self.elapsed_av,
             cycle=self.cycle,
             turn_count=self.turn_count,

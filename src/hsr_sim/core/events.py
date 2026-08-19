@@ -92,6 +92,38 @@ class AfterUltimate(Event):
     uid: str = ""
 
 
+# --- 상태 효과 --------------------------------------------------------------
+
+
+@dataclass
+class StatusApplied(Event):
+    uid: str = ""
+    effect_id: str = ""
+    stacks: int = 0
+    source_uid: str = ""
+
+
+@dataclass
+class StatusRemoved(Event):
+    uid: str = ""
+    effect_id: str = ""
+    reason: str = ""
+
+
+@dataclass
+class StatusResisted(Event):
+    uid: str = ""
+    effect_id: str = ""
+    chance: float = 0.0
+
+
+@dataclass
+class DotTick(Event):
+    uid: str = ""
+    effect_id: str = ""
+    amount: float = 0.0
+
+
 # --- 데미지 / HP -----------------------------------------------------------
 
 

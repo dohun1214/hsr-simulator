@@ -15,8 +15,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Tuple
 
-from ..core.enums import DamageTag, Element, Path, ScalingStat, Side, SkillKind
-from ..stats.stat import Stat
+from ..core.enums import (
+    DamageTag,
+    DebuffKind,
+    DurationTiming,
+    EffectCategory,
+    Element,
+    Path,
+    RefreshPolicy,
+    ScalingStat,
+    Side,
+    SkillKind,
+)
+from ..stats.stat import Stat, StatModifier
 
 
 @dataclass(frozen=True)
@@ -85,7 +96,52 @@ class SkillDefinition:
     #: 자료가 "적에 따라 다르다"고만 하므로 데이터로 둔다. docs/mechanics.md 4.4
     energy_grant_to_target: float = 0.0
 
+    #: 이 스킬이 대상에게 거는 상태 효과: (effect_id, 기본 확률)
+    inflicts: Tuple[Tuple[str, float], ...] = ()
+    #: 이 스킬이 시전자 자신에게 거는 상태 효과
+    self_effects: Tuple[str, ...] = ()
+
     #: 아직 이름이 없는 미래 메커니즘용 확장 슬롯
+    extra: Dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class DotSpec:
+    """지속 피해 설정. 근거: docs/mechanics.md 5.6"""
+
+    element: Element
+    #: 중첩 1개당 배율
+    multiplier: float = 0.0
+    scaling: ScalingStat = ScalingStat.ATK
+    #: 배율에 중첩 수를 곱할지 여부
+    per_stack: bool = True
+
+
+@dataclass(frozen=True)
+class StatusEffectDefinition:
+    """상태 효과 1개의 정적 정의.
+
+    중첩 상한, 재적용 정책, 지속시간 감소 시점에 **일반 규칙이 없으므로**
+    (docs/mechanics.md 5.3, 5.5) 전부 데이터로 둔다.
+    """
+
+    effect_id: str
+    name: LocalizedName
+    category: EffectCategory = EffectCategory.DEBUFF
+    debuff_kind: Optional[DebuffKind] = None
+
+    base_duration: int = 2
+    max_stacks: int = 1
+    refresh: RefreshPolicy = RefreshPolicy.REFRESH
+    duration_timing: DurationTiming = DurationTiming.OWNER_TURN_END
+    removable: bool = True
+
+    #: 중첩 1개당 적용되는 스탯 수정자
+    stat_modifiers: Tuple[StatModifier, ...] = ()
+    #: 지속 피해 (없으면 None)
+    dot: Optional[DotSpec] = None
+
+    #: 미래 메커니즘용 확장 슬롯
     extra: Dict[str, float] = field(default_factory=dict)
 
 
@@ -121,3 +177,5 @@ class UnitDefinition:
     ability_ids: Tuple[str, ...] = ()
     #: 적 AI / 자동 행동 선택기 id (레지스트리 키)
     behavior_id: str = "basic_attack_random"
+    #: 특정 디버프에 대한 개별 저항 (effect_id -> 저항값). 근거: docs/mechanics.md 5.4
+    debuff_res: Dict[str, float] = field(default_factory=dict)

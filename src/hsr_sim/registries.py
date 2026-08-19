@@ -24,6 +24,9 @@ UNIT_DEFINITIONS: Registry[Any] = Registry("유닛 정의")
 #: ability_id -> Ability (이벤트 구독으로 동작하는 패시브/특성/버프 로직)
 ABILITIES: Registry[Any] = Registry("특성")
 
+#: effect_id -> StatusEffectDefinition
+STATUS_EFFECTS: Registry[Any] = Registry("상태 효과")
+
 #: behavior_id -> Behavior (적 AI, 자동 행동 선택기)
 BEHAVIORS: Registry[Any] = Registry("행동 선택기")
 

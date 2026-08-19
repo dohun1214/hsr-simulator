@@ -33,6 +33,7 @@ def spawn_unit(
         base_stats=dict(definition.base_stats),
         weaknesses=frozenset(definition.weaknesses),
         res_overrides=dict(definition.res_overrides),
+        debuff_res=dict(definition.debuff_res),
         max_toughness=definition.max_toughness,
         current_toughness=definition.max_toughness,
         action_gauge=ACTION_GAUGE_FULL,

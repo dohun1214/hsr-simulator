@@ -19,6 +19,35 @@ WEAKNESS_RES = 0.0
 
 
 @dataclass
+class StatusEffect:
+    """유닛에 걸려 있는 상태 효과 인스턴스 (순수 데이터).
+
+    정의(중첩 상한, 스탯 수정자, DoT 설정)는 레지스트리에 있고
+    여기에는 "지금 몇 중첩이고 몇 턴 남았는가"만 저장한다.
+    """
+
+    effect_id: str
+    source_uid: str = ""
+    stacks: int = 1
+    #: 남은 턴 수. -1 이면 무한 (조건부 해제 효과)
+    remaining_turns: int = -1
+    #: 부여 순번. DoT 는 부여된 순서대로 발동한다 (docs/mechanics.md 5.6)
+    applied_seq: int = 0
+    #: DoT 스냅샷 (부여 시점의 시전자 정보). docs/mechanics.md 5.6
+    snapshot: Optional[Dict[str, float]] = None
+
+    def clone(self) -> "StatusEffect":
+        return StatusEffect(
+            effect_id=self.effect_id,
+            source_uid=self.source_uid,
+            stacks=self.stacks,
+            remaining_turns=self.remaining_turns,
+            applied_seq=self.applied_seq,
+            snapshot=dict(self.snapshot) if self.snapshot is not None else None,
+        )
+
+
+@dataclass
 class Unit:
     """전투에 참여하는 하나의 개체.
 
@@ -53,12 +82,26 @@ class Unit:
 
     weaknesses: frozenset = field(default_factory=frozenset)
     res_overrides: Dict[Element, float] = field(default_factory=dict)
+    #: 특정 디버프에 대한 개별 저항 (effect_id -> 저항값)
+    debuff_res: Dict[str, float] = field(default_factory=dict)
+
+    #: 걸려 있는 상태 효과. 순수 데이터이며 동작은 레지스트리의 정의가 담당한다.
+    effects: List["StatusEffect"] = field(default_factory=list)
 
     #: 향후 메커니즘이 임의의 값을 붙일 수 있는 확장 슬롯
     #: (에너지, 스택 카운터 등. 엔진 코어를 고치지 않고 확장하기 위함)
     extra: Dict[str, Any] = field(default_factory=dict)
 
     # --- 파생 값 ---------------------------------------------------------
+
+    def effect(self, effect_id: str) -> Optional["StatusEffect"]:
+        for eff in self.effects:
+            if eff.effect_id == effect_id:
+                return eff
+        return None
+
+    def has_effect(self, effect_id: str) -> bool:
+        return self.effect(effect_id) is not None
 
     def stat(self, stat: Stat) -> float:
         return compute_stat(stat, self.base_stats.get(stat, 0.0), self.modifiers)
@@ -121,5 +164,7 @@ class Unit:
             max_toughness=self.max_toughness,
             weaknesses=self.weaknesses,
             res_overrides=dict(self.res_overrides),
+            debuff_res=dict(self.debuff_res),
+            effects=[e.clone() for e in self.effects],
             extra=dict(self.extra),
         )

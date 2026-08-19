@@ -97,6 +97,47 @@ class SkillKind(Enum):
     TECHNIQUE = "technique"
 
 
+class EffectCategory(Enum):
+    """상태 효과 대분류. 근거: docs/mechanics.md 5.1"""
+
+    BUFF = "buff"
+    DEBUFF = "debuff"
+    OTHER = "other"
+
+
+class DebuffKind(Enum):
+    """디버프 하위 분류. 근거: docs/mechanics.md 5.1"""
+
+    CROWD_CONTROL = "crowd_control"
+    DOT = "dot"
+    SLOW = "slow"
+    WEAKEN = "weaken"
+    OTHER = "other"
+
+
+class DurationTiming(Enum):
+    """지속시간이 줄어드는 시점.
+
+    게임 자료에 일반 규칙이 없어 효과마다 지정한다. 근거: docs/mechanics.md 5.5
+    """
+
+    OWNER_TURN_END = "owner_turn_end"
+    OWNER_TURN_START = "owner_turn_start"
+
+
+class RefreshPolicy(Enum):
+    """이미 걸려 있는 효과를 다시 부여할 때의 동작."""
+
+    #: 지속시간만 갱신
+    REFRESH = "refresh"
+    #: 중첩만 증가 (지속시간 유지)
+    STACK = "stack"
+    #: 중첩 증가 + 지속시간 갱신
+    STACK_AND_REFRESH = "stack_and_refresh"
+    #: 이미 있으면 무시
+    IGNORE = "ignore"
+
+
 class ScalingStat(Enum):
     """스킬 배율이 곱해지는 기준 스탯."""
 
