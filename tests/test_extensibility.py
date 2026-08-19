@@ -131,3 +131,38 @@ def test_new_behavior_only_needs_registration():
         assert BEHAVIORS.get("test_always_skip") is always_skip
     finally:
         BEHAVIORS._items.pop("test_always_skip", None)
+
+
+def test_new_status_effect_only_needs_registration(battle):
+    """새 상태 효과 추가 = 정의 작성 + 레지스트리 등록.
+
+    엔진/상태 효과 코드 수정 없이 동작해야 한다.
+    """
+    from hsr_sim.battle import status
+    from hsr_sim.core.enums import DebuffKind, EffectCategory, RefreshPolicy
+    from hsr_sim.entities.definitions import LocalizedName, StatusEffectDefinition
+    from hsr_sim.registries import STATUS_EFFECTS
+
+    engine, state = battle
+    definition = StatusEffectDefinition(
+        effect_id="test_new_mechanic_spd_down",
+        name=LocalizedName(ko="테스트 신규 효과", en="Test New Effect", ko_verified=True),
+        category=EffectCategory.DEBUFF,
+        debuff_kind=DebuffKind.SLOW,
+        base_duration=2,
+        max_stacks=2,
+        refresh=RefreshPolicy.STACK_AND_REFRESH,
+        stat_modifiers=(
+            StatModifier(Stat.SPD, ModifierKind.PERCENT_OF_BASE, -0.25, "test_new"),
+        ),
+    )
+    STATUS_EFFECTS.register(definition.effect_id, definition)
+    try:
+        enemy = state.unit("E1")
+        base_spd = enemy.spd
+        status.apply_effect(engine, state, enemy, definition.effect_id)
+        assert enemy.spd == pytest.approx(base_spd * 0.75)
+        status.apply_effect(engine, state, enemy, definition.effect_id)
+        assert enemy.spd == pytest.approx(base_spd * 0.5)
+    finally:
+        STATUS_EFFECTS._items.pop(definition.effect_id, None)
