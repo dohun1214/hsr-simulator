@@ -84,6 +84,10 @@ class SkillDefinition:
     kind: SkillKind = SkillKind.BASIC_ATK
     element: Optional[Element] = None
     multiplier: float = 1.0
+    #: 배율이 신뢰할 수 있는 값인가.
+    #: 임포트한 적 스킬은 게임 데이터에서 배율을 복원하지 못해 False 다.
+    #: docs/data_sources.md 참고.
+    multiplier_verified: bool = True
     #: 확산(blast)에서 인접 대상에 적용할 배율. None 이면 주 대상과 동일.
     adjacent_multiplier: Optional[float] = None
     scaling: ScalingStat = ScalingStat.ATK

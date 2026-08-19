@@ -26,6 +26,9 @@ CYCLE_AV = 100.0
 #: 부동소수 오차로 순서가 흔들리는 것을 막기 위한 동점 판정 폭.
 AV_EPSILON = 1e-9
 
+#: 이 값 이하의 속도는 "행동하지 않음" 으로 취급한다.
+_NO_ACTION_SPD = 1e-6
+
 
 def base_action_value(spd: float) -> float:
     """SPD 로부터 기본 Action Value. 근거: docs/mechanics.md 1.1"""
@@ -77,7 +80,7 @@ def advance_time(units: List[Unit], delta_av: float) -> None:
     if delta_av <= 0.0:
         return
     for unit in units:
-        if not unit.alive:
+        if not unit.alive or unit.spd <= _NO_ACTION_SPD:
             continue
         unit.action_gauge = max(0.0, unit.action_gauge - unit.spd * delta_av)
 
@@ -95,6 +98,10 @@ def pick_next_actor(
     best: Optional[Tuple[float, int, Unit]] = None
     for unit in units:
         if not unit.alive:
+            continue
+        # 속도 0 인 개체(보스의 부위, 일부 소환물)는 스스로 행동하지 않는다.
+        # 실제 게임 데이터에 SpeedBase 가 0 인 몬스터가 65종 있다.
+        if unit.spd <= _NO_ACTION_SPD:
             continue
         av = action_value(unit)
         try:
