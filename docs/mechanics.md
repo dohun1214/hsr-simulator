@@ -386,7 +386,81 @@ Fandom 은 개별 효과 설명에서 "decreases by 1 turn at the start of Huohu
 
 ---
 
-## 6. 참고 자료
+## 6. 어그로 (도발치) — 적의 대상 선택
+
+조사일: 2026-08-19
+
+적의 공격 대상은 **완전 무작위가 아니다.** 캐릭터의 운명의 길에 따라 정해지는
+기본 어그로 값에 비례한 확률로 결정된다.
+
+### 6.1 운명의 길별 기본 어그로 **[확인됨 — 3개 자료 교차검증]**
+
+| 운명의 길 | 기본 어그로 | Fandom 표기 |
+|---|---|---|
+| 보존 (Preservation) | 150 | 6 |
+| 파멸 (Destruction) | 125 | 5 |
+| 동조 (Harmony) | 100 | 4 |
+| 허무 (Nihility) | 100 | 4 |
+| 풍요 (Abundance) | 100 | 4 |
+| 기억 (Remembrance) | 100 | 4 |
+| 환락 (Elation) | 100 | 4 |
+| 수렵 (The Hunt) | 75 | 3 |
+| 지식 (Erudition) | 75 | 3 |
+
+Fandom 과 KQM 은 3/4/5/6 으로, GamesRadar 와 GachaGuru 는 75/100/125/150 으로 적는다.
+**두 스케일은 정확히 25배 관계**이므로 같은 값이다 (75/25=3, 100/25=4, 125/25=5, 150/25=6).
+서로 다른 출처가 같은 비율을 제시한다는 점에서 신뢰도가 높다.
+
+우리 구현은 게임 내부 값에 가까운 **75/100/125/150** 을 쓴다.
+
+### 6.2 대상 선택 확률 **[확인됨 — 2개 자료]**
+
+> "Probability of Being Targeted = Aggro Character / ∑ Aggro Team"
+> — Fandom Wiki, Aggro / GachaGuru
+
+즉 각 캐릭터가 노려질 확률은 **자신의 어그로 / 살아 있는 아군 어그로 총합**이다.
+
+### 6.3 어그로 수정자 **[확인됨 — 2개 자료]**
+
+> "Aggro = Base Aggro x (1 + Aggro Modifier)"
+> — Fandom Wiki, Aggro / GachaGuru
+
+여러 수정자는 괄호 안에서 **가산**된다.
+
+> 예: 겁화 150 x (1 + 3 + 2) = 900 — GachaGuru
+
+이 형태는 우리 스탯 계산식 `기본값 x (1 + 퍼센트 합) + 고정값 합` 과 **정확히 같다.**
+따라서 어그로를 별도 시스템이 아니라 `Stat.AGGRO` 로 두면
+기존 버프/디버프/특성 시스템이 그대로 어그로를 조작할 수 있다.
+
+실제 예시 (자료에 언급된 값):
+
+- 인랑(Blade) 스킬: 자신 어그로 +1000%
+- 클라라(Clara) 필살기: 자신 어그로 +500%
+- 단항(Dan Heng), 제레(Seele): 행적으로 자신 기본 어그로 -50%
+- 옌칭(Yanqing): 특성으로 자신 기본 어그로 -60%
+
+### 6.4 어그로를 무시하는 공격 **[확인됨]**
+
+> "Some enemies have Bounce attacks - such attacks are unaffected by Aggro and all
+> characters have an equal chance to get hit."
+> 또한 적은 "Lock On" 으로 특정 캐릭터를 지정할 수 있다.
+> — Fandom Wiki, Aggro
+
+→ 대상 규칙(`TargetRule.selection`)에 `"aggro"` / `"uniform"` / `"lowest_hp"` 를 두어
+   스킬 데이터로 표현한다.
+
+### 6.5 미확인 **[미확인]**
+
+| 항목 | 현재 처리 |
+|---|---|
+| 확산/전체 적 공격이 주 대상을 어그로로 고르는지 | 주 대상 선택에 어그로를 적용 |
+| 전투 불능 캐릭터가 후보에서 제외되는지 | 제외 (생존 캐릭터만 후보) |
+| 아군이 적을 자동 선택할 때의 규칙 | 어그로 개념 없음. 별도 정책 사용 |
+
+---
+
+## 7. 참고 자료
 
 - KQM — How Do Speed and Turn Order Work in Honkai: Star Rail? <https://hsr.keqingmains.com/misc/speed-guide/>
 - KQM SRL — Complete Damage Formula <https://github.com/KQM-git/SRL/blob/master/docs/combat-mechanics/damage/damage-formula.md>
@@ -403,3 +477,6 @@ Fandom 은 개별 효과 설명에서 "decreases by 1 turn at the start of Huohu
 - Fandom Wiki — Effect RES <https://honkai-star-rail.fandom.com/wiki/Effect_RES>
 - ManaBuy — How to Calculate Effect Hit Rate <https://manabuy.com/blog/news/how-to-calculate-effect-hit-rate-honkai-star-rail-guide>
 - GachaGuru — Ultimate Guide to DoT <https://www.gachaguru.com/honkai-star-rail/ultimate-guide-damage-over-time-dot>
+- Fandom Wiki — Aggro <https://honkai-star-rail.fandom.com/wiki/Aggro>
+- GachaGuru — Navigating the Aggro System <https://www.gachaguru.com/honkai-star-rail/navigating-the-aggro-system-your-ultimate-guide>
+- GamesRadar — Honkai Star Rail taunt values <https://www.gamesradar.com/honkai-star-rail-taunt-values/>
