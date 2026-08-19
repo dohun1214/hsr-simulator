@@ -16,6 +16,7 @@ from ..stats.stat import Stat
 from .actions import BasicAttackAction, SkillAction, SkipAction, UltimateAction, UseSkillAction
 from .damage import DamageContext
 from . import status
+from . import toughness
 from .resources import change_skill_points, gain_energy, spend_energy
 from .targeting import resolve_hit_targets
 
@@ -86,6 +87,13 @@ def execute_skill(engine, state, action) -> None:
             skill_id=skill.skill_id,
         )
         engine.deal_damage(state, ctx)
+        # 인성치는 약점 속성일 때만 깎인다 (docs/mechanics.md 8.1)
+        if skill.toughness_damage:
+            toughness.reduce(
+                engine, state, actor, target, skill.toughness_damage,
+                skill.toughness_element or element,
+                ignores_weakness=skill.ignores_weakness,
+            )
         for effect_id, base_chance in skill.inflicts:
             status.try_apply_effect(
                 engine, state, target, effect_id, source=actor, base_chance=base_chance

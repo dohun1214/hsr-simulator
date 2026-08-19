@@ -34,6 +34,10 @@ class BattleConfig:
     max_turns: int = 500
     starting_skill_points: int = STARTING_SKILL_POINTS
     max_skill_points: int = MAX_SKILL_POINTS
+    #: 약점 격파 설정 (수치 근거가 없는 항목이 모여 있다). docs/mechanics.md 8장
+    break_config: Any = None
+    #: 공격자 레벨 -> 격파 기본 피해. 게임 데이터 원본 표.
+    break_base_damage_table: Any = None
     #: DoT 가 부여 시점의 시전자 스탯을 고정할지 여부.
     #: 자료로 확인되지 않아 두 방식을 모두 지원한다. docs/mechanics.md 5.6
     dot_snapshot: bool = True

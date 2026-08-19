@@ -37,6 +37,7 @@ from .actions import Action, BasicAttackAction, SkillAction, SkipAction, Ultimat
 from .damage import DamageContext, DamageResult, compute_damage
 from . import ai as enemy_ai
 from . import status
+from . import toughness
 from .resources import can_pay_skill_points
 from .state import BattleConfig, BattleState
 
@@ -287,6 +288,7 @@ class BattleEngine:
             scheduler.reset_gauge(unit, unit.pending_delay_ratio)
             unit.pending_delay_ratio = 1.0
             enemy_ai.tick_cooldowns(unit)
+            toughness.on_turn_end(self, state, unit)
             status.on_turn_end(self, state, unit)
         self.bus.emit(self, state, TurnEnd(uid=uid))
         state.active_uid = None
