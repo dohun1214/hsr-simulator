@@ -12,9 +12,11 @@ from __future__ import annotations
 
 from typing import Callable, List, Optional, Tuple
 
-from ..core.enums import BattleOutcome, DamageTag, Element, ScalingStat, Side
+from ..core.enums import BattleOutcome, DamageTag, Element, ScalingStat, Side, SkillKind
 from ..core.events import (
     AfterAction,
+    AfterUltimate,
+    BeforeUltimate,
     AfterDamage,
     BattleEnd,
     BattleStart,
@@ -31,11 +33,26 @@ from ..entities.unit import Unit
 from ..registries import ABILITIES, ACTION_HANDLERS, BEHAVIORS, UNIT_DEFINITIONS
 from ..stats.stat import Stat
 from . import scheduler
-from .actions import Action, SkipAction
+from .actions import Action, BasicAttackAction, SkillAction, SkipAction, UltimateAction
 from .damage import DamageContext, DamageResult, compute_damage
+from .resources import can_pay_skill_points
 from .state import BattleConfig, BattleState
 
 ActionChooser = Callable[["BattleEngine", BattleState, Unit], Action]
+
+
+def auto_ultimate_policy(engine, state, candidates):
+    """기본 필살기 정책: 쓸 수 있으면 곧바로 쓴다 (등록 순서대로).
+
+    실제 플레이는 타이밍을 재지만, V0.2 의 기본 자동 진행은 결정론이 우선이다.
+    탐색 단계에서는 이 자리에 평가 기반 정책이 들어간다.
+    """
+    return candidates[0] if candidates else None
+
+
+def never_ultimate_policy(engine, state, candidates):
+    """필살기를 쓰지 않는 정책 (테스트/비교용)."""
+    return None
 
 
 class BattleEngine:
@@ -72,6 +89,8 @@ class BattleEngine:
             scheduler.reset_gauge(unit)
         state.started = True
         state.cycle = 1
+        state.max_skill_points = self.config.max_skill_points
+        state.skill_points = min(self.config.starting_skill_points, state.max_skill_points)
         state.log.enabled = self.config.log_enabled
         state.log.add(state.elapsed_av, state.cycle, "battle", "전투 시작")
         self.bus.emit(self, state, BattleStart())
@@ -122,10 +141,12 @@ class BattleEngine:
     # ------------------------------------------------------------------
 
     def legal_actions(self, state: BattleState, uid: Optional[str] = None) -> List[Action]:
-        """해당 유닛이 지금 할 수 있는 모든 행동.
+        """해당 유닛이 이번 **턴에** 할 수 있는 행동 (일반 공격 / 전투 스킬).
+
+        필살기는 턴을 소모하지 않는 별개의 행동이므로 여기 포함되지 않는다.
+        `available_ultimates()` 를 따로 쓴다. 근거: docs/mechanics.md 4.3
 
         탐색 알고리즘의 분기 생성 지점이다.
-        V0.1 은 일반 공격뿐이지만, 스킬/필살기가 추가되면 여기서 함께 반환된다.
         """
         uid = uid or state.active_uid
         if uid is None:
@@ -134,23 +155,102 @@ class BattleEngine:
         if not unit.alive:
             return []
 
-        from .actions import BasicAttackAction
-        from .targeting import candidate_targets
-
         definition = UNIT_DEFINITIONS.try_get(unit.definition_id)
         if definition is None:
             return [SkipAction(actor_uid=uid, reason="정의 없음")]
-        skill = definition.skills.get(definition.basic_attack_id)
-        if skill is None:
-            return [SkipAction(actor_uid=uid, reason="일반 공격 없음")]
 
+        actions: List[Action] = []
+        actions += self._actions_for_skill(
+            state, unit, definition.basic_attack_id, BasicAttackAction
+        )
+        if definition.skill_id:
+            actions += self._actions_for_skill(
+                state, unit, definition.skill_id, SkillAction
+            )
+        if not actions:
+            return [SkipAction(actor_uid=uid, reason="가능한 행동 없음")]
+        return actions
+
+    def _actions_for_skill(self, state, unit, skill_id, action_cls) -> List[Action]:
+        from .targeting import candidate_targets
+
+        definition = UNIT_DEFINITIONS.get(unit.definition_id)
+        skill = definition.skills.get(skill_id) if skill_id else None
+        if skill is None:
+            return []
+        if unit.side is Side.ALLY and not can_pay_skill_points(state, skill.sp_cost):
+            return []
+        if skill.energy_cost and unit.energy < skill.energy_cost:
+            return []
         targets = candidate_targets(state, unit, skill.target_rule)
         if not targets:
-            return [SkipAction(actor_uid=uid, reason="대상 없음")]
+            return []
+        if skill.target_rule.shape == "aoe":
+            targets = targets[:1]  # 전체 공격은 대상 선택이 의미 없다
         return [
-            BasicAttackAction(actor_uid=uid, target_uid=target.uid, skill_id=skill.skill_id)
+            action_cls(actor_uid=unit.uid, target_uid=target.uid, skill_id=skill.skill_id)
             for target in sorted(targets, key=lambda u: (u.slot, u.uid))
         ]
+
+    # ------------------------------------------------------------------
+    # 필살기 (턴을 소모하지 않는 별도 행동)
+    # ------------------------------------------------------------------
+
+    def available_ultimates(
+        self, state: BattleState, side: Optional[Side] = Side.ALLY
+    ) -> List[UltimateAction]:
+        """지금 발동 가능한 필살기 목록.
+
+        에너지가 가득 찬 유닛이면 자기 턴이 아니어도 발동할 수 있다.
+        근거: docs/mechanics.md 4.3
+        """
+        if state.is_over:
+            return []
+        result: List[UltimateAction] = []
+        for unit in state.living(side):
+            definition = UNIT_DEFINITIONS.try_get(unit.definition_id)
+            if definition is None or not definition.ultimate_id:
+                continue
+            if not unit.energy_full:
+                continue
+            actions = self._actions_for_skill(
+                state, unit, definition.ultimate_id, UltimateAction
+            )
+            if actions:
+                result.append(actions[0])
+        return result
+
+    def use_ultimate(self, state: BattleState, action: UltimateAction) -> None:
+        """필살기 발동. **턴도 행동 게이지도 소모하지 않는다.**"""
+        self.bus.emit(self, state, BeforeUltimate(uid=action.actor_uid))
+        state.log.add(
+            state.elapsed_av, state.cycle, "ultimate",
+            f"{self._label(state, state.unit(action.actor_uid))} 필살기 발동",
+            uid=action.actor_uid,
+        )
+        ACTION_HANDLERS.get(action.kind)(self, state, action)
+        self.bus.emit(self, state, AfterUltimate(uid=action.actor_uid))
+        self._check_outcome(state)
+
+    def resolve_ultimates(self, state: BattleState, policy=None) -> int:
+        """발동 가능한 필살기를 정책에 따라 연달아 처리한다.
+
+        "Multiple Ultimates can also be chained in this way" 를 반영한다.
+        """
+        policy = policy if policy is not None else auto_ultimate_policy
+        used = 0
+        while not state.is_over:
+            candidates = self.available_ultimates(state)
+            if not candidates:
+                break
+            chosen = policy(self, state, candidates)
+            if chosen is None:
+                break
+            self.use_ultimate(state, chosen)
+            used += 1
+            if used > 32:  # 안전장치
+                break
+        return used
 
     def choose_action(self, state: BattleState, uid: str) -> Action:
         """유닛의 등록된 행동 선택기로 행동을 고른다 (적 AI / 자동 진행)."""
@@ -203,22 +303,32 @@ class BattleEngine:
         state: BattleState,
         ally_chooser: Optional[ActionChooser] = None,
         max_turns: Optional[int] = None,
+        ultimate_policy=None,
     ) -> BattleOutcome:
         """전투가 끝날 때까지 자동 진행."""
         if not state.started:
             self.start_battle(state)
         limit = max_turns if max_turns is not None else self.config.max_turns
+        self.resolve_ultimates(state, ultimate_policy)
         while not state.is_over and state.turn_count < limit:
             uid = self.advance_to_next_turn(state)
             if uid is None:
                 break
+            # 자기 턴 시작 시점에도 필살기를 쓸 수 있다 (턴은 유지된다)
+            self.resolve_ultimates(state, ultimate_policy)
+            if state.is_over:
+                break
             unit = state.unit(uid)
+            if not unit.alive:
+                self.end_turn(state)
+                continue
             if ally_chooser is not None and unit.side is Side.ALLY:
                 action = ally_chooser(self, state, unit)
             else:
                 action = self.choose_action(state, uid)
             self.perform(state, action)
             self.end_turn(state)
+            self.resolve_ultimates(state, ultimate_policy)
         return state.outcome
 
     # ------------------------------------------------------------------

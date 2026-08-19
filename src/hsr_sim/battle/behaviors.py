@@ -51,3 +51,32 @@ def basic_attack_lowest_hp(engine, state, unit) -> Action:
 BEHAVIORS.register("basic_attack_random", basic_attack_random)
 BEHAVIORS.register("basic_attack_first", basic_attack_first)
 BEHAVIORS.register("basic_attack_lowest_hp", basic_attack_lowest_hp)
+
+
+def skill_then_basic(engine, state, unit) -> Action:
+    """스킬 포인트가 있으면 전투 스킬, 없으면 일반 공격.
+
+    실제 플레이의 스킬 포인트 운영과는 다르지만, 자원 순환을 결정론적으로
+    검증하기에 충분하다. 탐색 단계에서는 이 자리가 평가 기반 정책으로 바뀐다.
+    """
+    actions = engine.legal_actions(state, unit.uid)
+    skills = [a for a in actions if type(a).__name__ == "SkillAction"]
+    if skills:
+        return skills[0]
+    basics = [a for a in actions if type(a).__name__ == "BasicAttackAction"]
+    if basics:
+        return basics[0]
+    return actions[0] if actions else SkipAction(actor_uid=unit.uid, reason="대상 없음")
+
+
+def basic_only(engine, state, unit) -> Action:
+    """항상 일반 공격 (스킬 포인트 절약 정책, 테스트용)."""
+    actions = engine.legal_actions(state, unit.uid)
+    basics = [a for a in actions if type(a).__name__ == "BasicAttackAction"]
+    if basics:
+        return basics[0]
+    return actions[0] if actions else SkipAction(actor_uid=unit.uid, reason="대상 없음")
+
+
+BEHAVIORS.register("skill_then_basic", skill_then_basic)
+BEHAVIORS.register("basic_only", basic_only)

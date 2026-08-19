@@ -44,3 +44,29 @@ class SkipAction(Action):
 
     def describe(self) -> str:
         return f"{self.actor_uid} 행동 없음 ({self.reason})"
+
+
+@dataclass(frozen=True)
+class SkillAction(Action):
+    """전투 스킬. 스킬 포인트를 소모한다."""
+
+    target_uid: str = ""
+    skill_id: str = "skill"
+
+    def describe(self) -> str:
+        return f"{self.actor_uid} -> {self.target_uid} 전투 스킬"
+
+
+@dataclass(frozen=True)
+class UltimateAction(Action):
+    """필살기.
+
+    턴을 소모하지 않는다. 자기 턴이 아닐 때도 사용할 수 있다.
+    근거: docs/mechanics.md 4.3
+    """
+
+    target_uid: str = ""
+    skill_id: str = "ultimate"
+
+    def describe(self) -> str:
+        return f"{self.actor_uid} -> {self.target_uid} 필살기"

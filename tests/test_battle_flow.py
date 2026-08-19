@@ -3,7 +3,7 @@
 import pytest
 
 from hsr_sim import BattleConfig, BattleEngine, BattleOutcome, CritMode, build_battle, definitions
-from hsr_sim.battle.actions import BasicAttackAction, SkipAction
+from hsr_sim.battle.actions import BasicAttackAction, SkillAction, SkipAction
 from hsr_sim.core.enums import Side
 from hsr_sim.stats.stat import Stat
 
@@ -40,15 +40,18 @@ def test_legal_actions_lists_one_action_per_living_enemy():
     engine, state = make(enemies=("test_enemy_a", "test_enemy_b"))
     actions = engine.legal_actions(state, "A1")
     assert {a.target_uid for a in actions} == {"E1", "E2"}
-    assert all(isinstance(a, BasicAttackAction) for a in actions)
+    # 일반 공격과 전투 스킬이 각각 대상 수만큼 생성된다
+    assert sum(isinstance(a, BasicAttackAction) for a in actions) == 2
+    assert sum(isinstance(a, SkillAction) for a in actions) == 2
 
     state.unit("E1").alive = False
     actions = engine.legal_actions(state, "A1")
     assert {a.target_uid for a in actions} == {"E2"}
 
-    # 적 유닛은 아군을 대상으로 삼는다
+    # 적 유닛은 아군을 대상으로 삼고, 전투 스킬이 없으므로 일반 공격만 나온다
     enemy_actions = engine.legal_actions(state, "E2")
     assert {a.target_uid for a in enemy_actions} == {"A1"}
+    assert all(isinstance(a, BasicAttackAction) for a in enemy_actions)
 
 
 def test_unit_dies_at_zero_hp_and_stops_acting():

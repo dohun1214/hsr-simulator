@@ -93,6 +93,9 @@ def test_branching_search_from_one_state():
     engine, state = build(crit=CritMode.NEVER)
     engine.advance_to_next_turn(state)
     actions = engine.legal_actions(state)
+    # 적 2체 x (일반 공격 + 전투 스킬)
+    assert len(actions) == 4
+    actions = [a for a in actions if type(a).__name__ == "BasicAttackAction"]
     assert len(actions) == 2
 
     futures = []

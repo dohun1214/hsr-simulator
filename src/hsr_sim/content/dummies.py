@@ -1,4 +1,4 @@
-"""V0.1 검증용 테스트 유닛.
+"""V0.1~V0.2 검증용 테스트 유닛.
 
 주의: 여기 있는 유닛은 **실제 게임 캐릭터/적이 아니다.**
 전투 엔진 자체를 검증하기 위한 가상의 개체이며, 이름도 우리가 지은 것이다.
@@ -6,30 +6,75 @@
 실제 캐릭터/적 데이터는 별도 임포터로 들어올 예정이며,
 그때는 반드시 공식 한국어 명칭을 확인해서 `LocalizedName.ko_verified=True` 로 표시한다.
 (요구사항 6)
+
+자원 수치(SP +1/-1, 에너지 20/30/5)는 게임의 표준값이다. 근거: docs/mechanics.md 3~4장
 """
 
 from __future__ import annotations
 
-from ..core.enums import DamageTag, Element, Path, ScalingStat, Side
+from typing import Optional
+
+from ..core.enums import DamageTag, Element, Path, ScalingStat, Side, SkillKind
 from ..entities.definitions import LocalizedName, SkillDefinition, TargetRule, UnitDefinition
 from ..registries import UNIT_DEFINITIONS
 from ..stats.stat import Stat
 
 
-def _basic(skill_id: str, name_ko: str, name_en: str, multiplier: float) -> SkillDefinition:
+def _name(ko: str, en: str) -> LocalizedName:
+    return LocalizedName(ko=ko, en=en, ko_verified=True)
+
+
+def basic_skill(multiplier: float, energy_to_target: float = 0.0) -> SkillDefinition:
+    """일반 공격: 스킬 포인트 +1, 에너지 +20"""
     return SkillDefinition(
-        skill_id=skill_id,
-        name=LocalizedName(ko=name_ko, en=name_en, ko_verified=True),
+        skill_id="basic",
+        name=_name("테스트 일반 공격", "Test Basic Attack"),
         tag=DamageTag.BASIC_ATK,
+        kind=SkillKind.BASIC_ATK,
         multiplier=multiplier,
-        scaling=ScalingStat.ATK,
         target_rule=TargetRule(side="enemy", shape="single"),
+        sp_gain=1,
+        energy_gain=20.0,
+        energy_grant_to_target=energy_to_target,
+    )
+
+
+def combat_skill(
+    multiplier: float,
+    shape: str = "single",
+    adjacent_multiplier: Optional[float] = None,
+) -> SkillDefinition:
+    """전투 스킬: 스킬 포인트 -1, 에너지 +30"""
+    return SkillDefinition(
+        skill_id="skill",
+        name=_name("테스트 전투 스킬", "Test Skill"),
+        tag=DamageTag.SKILL,
+        kind=SkillKind.SKILL,
+        multiplier=multiplier,
+        adjacent_multiplier=adjacent_multiplier,
+        target_rule=TargetRule(side="enemy", shape=shape),
+        sp_cost=1,
+        energy_gain=30.0,
+    )
+
+
+def ultimate_skill(multiplier: float, max_energy: float, shape: str = "single") -> SkillDefinition:
+    """필살기: 에너지 전량 소모, 사용 후 +5"""
+    return SkillDefinition(
+        skill_id="ultimate",
+        name=_name("테스트 필살기", "Test Ultimate"),
+        tag=DamageTag.ULTIMATE,
+        kind=SkillKind.ULTIMATE,
+        multiplier=multiplier,
+        target_rule=TargetRule(side="enemy", shape=shape),
+        energy_cost=max_energy,
+        energy_gain=5.0,
     )
 
 
 TEST_ALLY_A = UnitDefinition(
     unit_id="test_ally_a",
-    name=LocalizedName(ko="테스트 아군 A", en="Test Ally A", ko_verified=True),
+    name=_name("테스트 아군 A", "Test Ally A"),
     default_side=Side.ALLY,
     element=Element.PHYSICAL,
     path=Path.DESTRUCTION,
@@ -40,14 +85,23 @@ TEST_ALLY_A = UnitDefinition(
         Stat.SPD: 100.0,
         Stat.CRIT_RATE: 0.5,
         Stat.CRIT_DMG: 1.0,
+        Stat.ENERGY_REGEN_RATE: 0.0,
     },
-    skills={"basic": _basic("basic", "테스트 일반 공격", "Test Basic Attack", 1.0)},
-    behavior_id="basic_attack_first",
+    skills={
+        "basic": basic_skill(1.0),
+        "skill": combat_skill(2.0),
+        "ultimate": ultimate_skill(3.0, max_energy=120.0, shape="aoe"),
+    },
+    basic_attack_id="basic",
+    skill_id="skill",
+    ultimate_id="ultimate",
+    max_energy=120.0,
+    behavior_id="skill_then_basic",
 )
 
 TEST_ALLY_B = UnitDefinition(
     unit_id="test_ally_b",
-    name=LocalizedName(ko="테스트 아군 B", en="Test Ally B", ko_verified=True),
+    name=_name("테스트 아군 B", "Test Ally B"),
     default_side=Side.ALLY,
     element=Element.FIRE,
     path=Path.HUNT,
@@ -58,14 +112,23 @@ TEST_ALLY_B = UnitDefinition(
         Stat.SPD: 134.0,
         Stat.CRIT_RATE: 0.5,
         Stat.CRIT_DMG: 1.0,
+        Stat.ENERGY_REGEN_RATE: 0.0,
     },
-    skills={"basic": _basic("basic", "테스트 일반 공격", "Test Basic Attack", 1.1)},
+    skills={
+        "basic": basic_skill(1.1),
+        "skill": combat_skill(1.5, shape="blast", adjacent_multiplier=0.75),
+        "ultimate": ultimate_skill(4.0, max_energy=110.0),
+    },
+    basic_attack_id="basic",
+    skill_id="skill",
+    ultimate_id="ultimate",
+    max_energy=110.0,
     behavior_id="basic_attack_lowest_hp",
 )
 
 TEST_ENEMY_A = UnitDefinition(
     unit_id="test_enemy_a",
-    name=LocalizedName(ko="테스트 적 A", en="Test Enemy A", ko_verified=True),
+    name=_name("테스트 적 A", "Test Enemy A"),
     default_side=Side.ENEMY,
     element=Element.PHYSICAL,
     base_stats={
@@ -76,7 +139,7 @@ TEST_ENEMY_A = UnitDefinition(
         Stat.CRIT_RATE: 0.0,
         Stat.CRIT_DMG: 0.5,
     },
-    skills={"basic": _basic("basic", "테스트 적 공격", "Test Enemy Attack", 1.0)},
+    skills={"basic": basic_skill(1.0, energy_to_target=10.0)},
     weaknesses=(Element.PHYSICAL,),
     max_toughness=60.0,
     behavior_id="basic_attack_random",
@@ -84,7 +147,7 @@ TEST_ENEMY_A = UnitDefinition(
 
 TEST_ENEMY_B = UnitDefinition(
     unit_id="test_enemy_b",
-    name=LocalizedName(ko="테스트 적 B", en="Test Enemy B", ko_verified=True),
+    name=_name("테스트 적 B", "Test Enemy B"),
     default_side=Side.ENEMY,
     element=Element.ICE,
     base_stats={
@@ -95,12 +158,31 @@ TEST_ENEMY_B = UnitDefinition(
         Stat.CRIT_RATE: 0.0,
         Stat.CRIT_DMG: 0.5,
     },
-    skills={"basic": _basic("basic", "테스트 적 공격", "Test Enemy Attack", 0.9)},
+    skills={"basic": basic_skill(0.9, energy_to_target=10.0)},
+    weaknesses=(Element.FIRE,),
+    max_toughness=30.0,
+    behavior_id="basic_attack_random",
+)
+
+TEST_ENEMY_C = UnitDefinition(
+    unit_id="test_enemy_c",
+    name=_name("테스트 적 C", "Test Enemy C"),
+    default_side=Side.ENEMY,
+    element=Element.WIND,
+    base_stats={
+        Stat.MAX_HP: 4000.0,
+        Stat.ATK: 550.0,
+        Stat.DEF: 800.0,
+        Stat.SPD: 95.0,
+        Stat.CRIT_RATE: 0.0,
+        Stat.CRIT_DMG: 0.5,
+    },
+    skills={"basic": basic_skill(0.9, energy_to_target=10.0)},
     weaknesses=(Element.FIRE,),
     max_toughness=30.0,
     behavior_id="basic_attack_random",
 )
 
 
-for _definition in (TEST_ALLY_A, TEST_ALLY_B, TEST_ENEMY_A, TEST_ENEMY_B):
+for _definition in (TEST_ALLY_A, TEST_ALLY_B, TEST_ENEMY_A, TEST_ENEMY_B, TEST_ENEMY_C):
     UNIT_DEFINITIONS.register(_definition.unit_id, _definition)
