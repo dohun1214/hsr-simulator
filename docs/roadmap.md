@@ -71,7 +71,10 @@
 ### ~~V0.7 — 실제 데이터 임포트 (캐릭터)~~ (완료)
 - ~~캐릭터 91명 / 스킬 688개 / 배율 89.7% 추출 / 어그로 표 게임 데이터 재검증~~
 
-### V0.8 — 광추 · 유물 · 행적 · 성혼
+### ~~V0.7.1 — 행적 + 실측 검증 모드~~ (완료)
+- ~~행적 5196노드 / 특성 한국어 303개 / 게임 화면 스탯 입력형 검증 모드~~
+
+### V0.8 — 광추 · 유물 · 성혼
 - Dimbreath TurnBasedGameData / StarRailRes / HSRMaps 로부터 캐릭터·적·스킬 임포트
 - **공식 한국어 명칭 확보 및 교차검증** (`LocalizedName.ko_verified`)
   → `TextMap/TextMapKR_0.json` 에 존재함을 확인. docs/data_sources.md 참고

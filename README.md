@@ -130,7 +130,17 @@ PYTHONPATH=src python -m hsr_sim --mode verify --character 단항 --enemy "얼�
 - 승급 단계 기반 레벨 스케일링 — 단항 Lv80 → ATK 546.84 (게임과 일치)
 - **어그로 표를 게임 데이터로 재검증** — `BaseAggro` 가 기존 값과 전부 일치
 
-**아직 없는 것**: 광추 / 유물 / 행적 / 성혼. 지금 스탯은 캐릭터 본체만이다.
+- **행적** 5196개 노드 — 스탯 합계, 특성 303개(한국어 100%, StarRailRes 보조 소스)
+  `with_traces=True` 로 적용, 속성 피해 증가는 데미지 파이프라인까지 연결
+
+**실측 검증** — 게임 화면의 최종 스탯을 입력받아 데미지 공식만 검증한다.
+
+```bash
+PYTHONPATH=src python -m hsr_sim --mode verify --character 카프카 \
+    --atk 3200 --crit-rate 0.75 --crit-dmg 1.8 --dmg-bonus 0.466 --enemy "얼음 서슬"
+```
+
+**아직 없는 것**: 광추 / 유물 / 성혼.
 
 **미구현** (구조만 마련):
 
@@ -145,7 +155,7 @@ PYTHONPATH=src python -m hsr_sim --mode verify --character 단항 --enemy "얼�
 
 ## 검증 상태
 
-`python -m pytest` — **191개 테스트 통과**.
+`python -m pytest` — **199개 테스트 통과**.
 
 주요 수치는 손계산과 대조해 고정했다. 예시 (`--crit never`):
 
