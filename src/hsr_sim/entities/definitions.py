@@ -106,6 +106,14 @@ class SkillDefinition:
     #: 자료가 "적에 따라 다르다"고만 하므로 데이터로 둔다. docs/mechanics.md 4.4
     energy_grant_to_target: float = 0.0
 
+    #: 인성치 감소량 (게임 데이터의 ShowStanceList[0]).
+    #: 일반 공격 30 / 전투 스킬 60 / 필살기 90 이 흔하다. docs/mechanics.md 8.1
+    toughness_damage: float = 0.0
+    #: 인성치를 깎는 속성 (게임 데이터의 StanceDamageType). None 이면 스킬 속성을 쓴다.
+    toughness_element: Optional[Element] = None
+    #: True 면 약점이 아니어도 인성치를 깎는다 (아케론 필살기 등)
+    ignores_weakness: bool = False
+
     #: 이 스킬 사용 후의 행동 게이지 배수 (게임 데이터의 DelayRatio).
     #: 1.0 이 기본이고 1.5 면 다음 턴이 1.5배 늦게 온다. docs/mechanics.md 7.5
     delay_ratio: float = 1.0

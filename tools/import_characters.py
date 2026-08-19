@@ -40,6 +40,7 @@ NEEDED_FILES = [
     "ExcelOutput/AvatarSkillTreeConfig.json",
     "ExcelOutput/AvatarPromotionConfig.json",
     "ExcelOutput/AvatarSkillConfig.json",
+    "ExcelOutput/AvatarBreakDamage.json",
     "TextMap/TextMapEN.json",
     "TextMap/TextMapKR_0.json",
     "TextMap/TextMapKR_1.json",
@@ -417,6 +418,11 @@ def run_import(source: str, srres_path: Optional[str] = None) -> dict:
         },
         "characters": characters,
         "skills": skills,
+        # 공격자 레벨별 격파 기본 피해 (게임 원본 표). docs/mechanics.md 8.2
+        "break_base_damage": {
+            str(row["Level"]): value(row.get("BreakBaseDamage"))
+            for row in load(source, "ExcelOutput/AvatarBreakDamage.json")
+        },
     }
 
 

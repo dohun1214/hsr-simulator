@@ -146,7 +146,7 @@ def test_blast_skill_has_an_adjacent_multiplier():
 def test_toughness_damage_is_imported():
     definition = characters.build_definition(DAN_HENG)
     basic = definition.skills[definition.basic_attack_id]
-    assert basic.extra["toughness_damage"] == pytest.approx(30.0)
+    assert basic.toughness_damage == pytest.approx(30.0)
 
 
 # --- 검색 / 전투 -----------------------------------------------------------

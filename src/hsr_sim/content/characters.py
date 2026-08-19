@@ -130,7 +130,7 @@ def _skill_definition(
         energy_gain=float(raw.get("energy_gain") or 0.0),
         energy_cost=float(character["max_energy"]) if kind is SkillKind.ULTIMATE else 0.0,
         delay_ratio=float(raw.get("delay_ratio") or 1.0),
-        extra={"toughness_damage": float(raw.get("toughness_damage") or 0.0)},
+        toughness_damage=float(raw.get("toughness_damage") or 0.0),
     )
 
 
