@@ -48,7 +48,7 @@ def demo_battle(config: BattleConfig) -> None:
     engine, state = make(
         config,
         allies=("test_ally_a", "test_ally_b", "test_ally_c"),
-        enemies=("test_enemy_c", "test_enemy_c"),
+        enemies=("test_enemy_sequence", "test_enemy_smasher"),
     )
     engine.start_battle(state)
     print_aggro(state)

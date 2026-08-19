@@ -53,6 +53,8 @@ src/hsr_sim/
     resources.py   스킬 포인트 / 에너지 증감과 상한 처리
     status.py      상태 효과 부여/중첩/만료, 적용 확률, DoT 발동
     aggro.py       운명의 길 기반 어그로와 적의 대상 선택
+    ai.py          적의 행동 패턴 (고정 순환 / 효용 기반 결정)
+    predicates.py  AI 조건 레지스트리
     scheduler.py   Action Gauge / Action Value / 사이클
     damage.py      데미지 계산 파이프라인
     targeting.py   대상 지정 규칙
@@ -183,6 +185,28 @@ DoT 도 같은 틀 위에 있다. `StatusEffectDefinition.dot` 이 있으면 DoT
 대상 선택 방식(`아그로 가중` / `균등` / `최저 HP`)은 `TargetRule.selection` 이라는
 **데이터**다. 게임에 어그로를 무시하는 Bounce 공격과 Lock On 이 있기 때문에
 (docs/mechanics.md 6.4) 선택 규칙을 코드가 아니라 스킬 데이터로 두어야 한다.
+
+### 3.10 적 AI 는 게임 데이터 구조를 그대로 옮겼다
+
+`Config/ConfigAI/Monster_*.json` 362개를 분석해서 나온 구조를 그대로 모델링했다
+(docs/mechanics.md 7장).
+
+```python
+EnemyAI(ai_id, mode="sequence" | "decision", decisions=(AIDecision, ...))
+AIDecision(name, skill_id, score, predicate, cooldown, phases, counter_ops)
+Predicate(kind, params, negate)   # kind 는 PREDICATES 레지스트리 키
+```
+
+- `Predicate` 는 **순수 데이터**다. 판정 함수만 레지스트리에 있다.
+  덕분에 AI 정의를 그대로 직렬화할 수 있고, 나중에 게임 데이터에서
+  자동 변환해 넣을 때 코드 변경이 필요 없다.
+- 새 조건이 필요하면 함수 하나 작성 + `PREDICATES.register()` 로 끝난다.
+- 런타임 상태(`phase`, `sequence_index`, `skill_cooldowns`, `counters`)는
+  전부 `Unit` 위의 순수 데이터라 상태 복제에 그대로 따라간다.
+
+**설계상 중요한 점**: 적 AI 를 파이썬 함수로 하드코딩하지 않았다.
+게임에는 몬스터가 2591종 있고 AI 가 362종이다. 코드로 쓰면 유지가 불가능하고,
+무엇보다 **탐색 알고리즘이 적의 다음 행동을 예측하려면 AI 가 데이터여야 한다.**
 
 ## 4. 탐색을 위한 API (이미 준비된 부분)
 
