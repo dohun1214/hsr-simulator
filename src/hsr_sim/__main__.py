@@ -26,12 +26,32 @@ def make(
     return engine, state
 
 
+def print_aggro(state) -> None:
+    """적이 누구를 노릴 확률. 운명의 길에서 나온다 (docs/mechanics.md 6장)."""
+    from .battle import aggro
+    from .core.enums import Side
+    from .registries import UNIT_DEFINITIONS
+
+    weights = aggro.target_weights(state.living(Side.ALLY))
+    print("파티 어그로 (적이 노릴 확률):")
+    for unit in state.living(Side.ALLY):
+        definition = UNIT_DEFINITIONS.get(unit.definition_id)
+        path = definition.path.value if definition.path else "-"
+        print(
+            f"  {unit.uid} {definition.name!s:<12} {path:<12}"
+            f" 어그로 {aggro.aggro_of(unit):6.1f}  ->  {weights[unit.uid]:.1%}"
+        )
+    print()
+
+
 def demo_battle(config: BattleConfig) -> None:
     engine, state = make(
         config,
         allies=("test_ally_a", "test_ally_b", "test_ally_c"),
         enemies=("test_enemy_c", "test_enemy_c"),
     )
+    engine.start_battle(state)
+    print_aggro(state)
     outcome = engine.run(state)
     print(state.log.render())
     print("-" * 62)

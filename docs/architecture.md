@@ -52,6 +52,7 @@ src/hsr_sim/
     state.py       BattleState, BattleConfig (스킬 포인트 포함)
     resources.py   스킬 포인트 / 에너지 증감과 상한 처리
     status.py      상태 효과 부여/중첩/만료, 적용 확률, DoT 발동
+    aggro.py       운명의 길 기반 어그로와 적의 대상 선택
     scheduler.py   Action Gauge / Action Value / 사이클
     damage.py      데미지 계산 파이프라인
     targeting.py   대상 지정 규칙
@@ -161,6 +162,27 @@ V0.2 는 정책 함수(`ultimate_policy`)로 이 축을 분리해 두었고,
 DoT 도 같은 틀 위에 있다. `StatusEffectDefinition.dot` 이 있으면 DoT 이고,
 발동은 `status.on_turn_start()` 가 `applied_seq` 순서로 처리한다
 (게임의 "부여된 순서대로" 규칙, docs/mechanics.md 5.6).
+
+### 3.9 어그로를 별도 시스템으로 만들지 않은 이유
+
+게임의 어그로 계산은
+
+```
+어그로 = 기본 어그로 x (1 + 수정자 합)
+```
+
+인데, 이는 우리 스탯 계산식 `기본값 x (1 + 퍼센트 합) + 고정값 합` 과 **완전히 같은 형태**다.
+
+그래서 어그로 전용 필드나 전용 수정자 목록을 만들지 않고 `Stat.AGGRO` 로 두었다. 결과:
+
+- 도발/어그로 감소가 **새 코드 없이** 기존 상태 효과로 표현된다
+  (`StatModifier(Stat.AGGRO, PERCENT_OF_BASE, 5.0)` = 도발 +500%)
+- 광추/유물/행적이 어그로를 건드려도 추가 배관이 필요 없다
+- 기본값만 운명의 길에서 유도해 `spawn_unit()` 에서 채운다
+
+대상 선택 방식(`아그로 가중` / `균등` / `최저 HP`)은 `TargetRule.selection` 이라는
+**데이터**다. 게임에 어그로를 무시하는 Bounce 공격과 Lock On 이 있기 때문에
+(docs/mechanics.md 6.4) 선택 규칙을 코드가 아니라 스킬 데이터로 두어야 한다.
 
 ## 4. 탐색을 위한 API (이미 준비된 부분)
 
