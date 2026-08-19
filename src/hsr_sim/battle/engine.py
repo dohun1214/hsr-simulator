@@ -30,11 +30,12 @@ from ..core.events import (
     UnitDefeated,
 )
 from ..entities.unit import Unit
-from ..registries import ABILITIES, ACTION_HANDLERS, BEHAVIORS, UNIT_DEFINITIONS
+from ..registries import ABILITIES, ACTION_HANDLERS, BEHAVIORS, ENEMY_AI, UNIT_DEFINITIONS
 from ..stats.stat import Stat
 from . import scheduler
 from .actions import Action, BasicAttackAction, SkillAction, SkipAction, UltimateAction
 from .damage import DamageContext, DamageResult, compute_damage
+from . import ai as enemy_ai
 from . import status
 from .resources import can_pay_skill_points
 from .state import BattleConfig, BattleState
@@ -87,7 +88,11 @@ class BattleEngine:
         if state.started:
             return
         for unit in state.all_units():
-            scheduler.reset_gauge(unit)
+            definition = UNIT_DEFINITIONS.try_get(unit.definition_id)
+            ratio = definition.initial_delay_ratio if definition else 1.0
+            scheduler.reset_gauge(unit, ratio)
+            if definition is not None and definition.ai_id:
+                enemy_ai.start_cooldowns(unit, ENEMY_AI.try_get(definition.ai_id))
         state.started = True
         state.cycle = 1
         state.max_skill_points = self.config.max_skill_points
@@ -278,7 +283,10 @@ class BattleEngine:
             return
         unit = state.unit(uid)
         if unit.alive:
-            scheduler.reset_gauge(unit)
+            # 사용한 스킬의 행동 게이지 배수를 반영한다 (docs/mechanics.md 7.5)
+            scheduler.reset_gauge(unit, unit.pending_delay_ratio)
+            unit.pending_delay_ratio = 1.0
+            enemy_ai.tick_cooldowns(unit)
             status.on_turn_end(self, state, unit)
         self.bus.emit(self, state, TurnEnd(uid=uid))
         state.active_uid = None

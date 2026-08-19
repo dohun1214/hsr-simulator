@@ -105,3 +105,30 @@ def basic_only(engine, state, unit) -> Action:
 
 BEHAVIORS.register("skill_then_basic", skill_then_basic)
 BEHAVIORS.register("basic_only", basic_only)
+
+
+def enemy_ai_behavior(engine, state, unit) -> Action:
+    """적의 행동 패턴 정의(`EnemyAI`)에 따라 스킬과 대상을 고른다.
+
+    게임의 AI 구조를 그대로 따른다 (docs/mechanics.md 7장).
+    정의가 없으면 일반 공격으로 물러난다.
+    """
+    from . import ai as enemy_ai
+    from .actions import UseSkillAction
+
+    skill_id = enemy_ai.decide(state, unit)
+    if skill_id is None:
+        return basic_attack_aggro(engine, state, unit)
+
+    rule = _skill_rule(unit, skill_id)
+    decision = enemy_ai.decision_for(state, unit, skill_id)
+    selection = (decision.target_selection if decision else None) or rule.selection
+
+    targets = candidate_targets(state, unit, rule)
+    target = aggro.select_target(state, targets, selection)
+    if target is None:
+        return SkipAction(actor_uid=unit.uid, reason="대상 없음")
+    return UseSkillAction(actor_uid=unit.uid, target_uid=target.uid, skill_id=skill_id)
+
+
+BEHAVIORS.register("enemy_ai", enemy_ai_behavior)

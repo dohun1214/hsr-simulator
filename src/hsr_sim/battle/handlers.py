@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from ..core.enums import Side, SkillKind
 from ..registries import ACTION_HANDLERS, UNIT_DEFINITIONS
-from .actions import BasicAttackAction, SkillAction, SkipAction, UltimateAction
+from .actions import BasicAttackAction, SkillAction, SkipAction, UltimateAction, UseSkillAction
 from .damage import DamageContext
 from . import status
 from .resources import change_skill_points, gain_energy, spend_energy
@@ -39,6 +39,11 @@ def execute_skill(engine, state, action) -> None:
 
     definition, skill = _skill_of(actor, action.skill_id)
     element = skill.element or definition.element
+
+    # 스킬마다 행동 게이지 배수가 다르다 (게임 데이터 DelayRatio). docs/mechanics.md 7.5
+    # 필살기는 턴을 소모하지 않으므로 제외한다.
+    if skill.kind is not SkillKind.ULTIMATE:
+        actor.pending_delay_ratio = skill.delay_ratio
 
     # --- 자원 소모 -------------------------------------------------------
     if skill.sp_cost and actor.side is Side.ALLY:
@@ -109,4 +114,5 @@ def handle_skip(engine, state, action: SkipAction) -> None:
 ACTION_HANDLERS.register("BasicAttackAction", execute_skill)
 ACTION_HANDLERS.register("SkillAction", execute_skill)
 ACTION_HANDLERS.register("UltimateAction", execute_skill)
+ACTION_HANDLERS.register("UseSkillAction", execute_skill)
 ACTION_HANDLERS.register("SkipAction", handle_skip)

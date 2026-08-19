@@ -37,9 +37,13 @@ def action_value(unit: Unit) -> float:
     return unit.action_gauge / unit.spd
 
 
-def reset_gauge(unit: Unit) -> None:
-    """행동을 마친 유닛의 게이지를 되돌린다. 근거: docs/mechanics.md 1.2"""
-    unit.action_gauge = ACTION_GAUGE_FULL
+def reset_gauge(unit: Unit, ratio: float = 1.0) -> None:
+    """행동을 마친 유닛의 게이지를 되돌린다. 근거: docs/mechanics.md 1.2
+
+    ``ratio`` 는 게임 데이터의 DelayRatio 로, 1보다 크면 다음 턴이 늦게 온다
+    (docs/mechanics.md 7.5). 기본값 1.0 이면 기존 동작과 같다.
+    """
+    unit.action_gauge = ACTION_GAUGE_FULL * max(0.0, ratio)
 
 
 def modify_gauge(unit: Unit, advance: float = 0.0, delay: float = 0.0) -> None:

@@ -70,3 +70,17 @@ class UltimateAction(Action):
 
     def describe(self) -> str:
         return f"{self.actor_uid} -> {self.target_uid} 필살기"
+
+
+@dataclass(frozen=True)
+class UseSkillAction(Action):
+    """스킬 id 로 직접 지정하는 범용 행동.
+
+    적 AI 는 스킬 슬롯 이름(Skill01 ...)으로 행동하므로 이 형태를 쓴다.
+    """
+
+    target_uid: str = ""
+    skill_id: str = "basic"
+
+    def describe(self) -> str:
+        return f"{self.actor_uid} -> {self.target_uid} {self.skill_id}"

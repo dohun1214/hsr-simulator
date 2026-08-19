@@ -31,6 +31,10 @@ def spawn_unit(
     base_stats.setdefault(
         Stat.AGGRO, base_aggro_for(definition.path, definition.base_aggro)
     )
+    # 적은 기본 효과 저항을 가진다 (게임 데이터 StatusResistanceBase).
+    # docs/mechanics.md 7.6
+    if definition.status_resistance is not None:
+        base_stats.setdefault(Stat.EFFECT_RES, definition.status_resistance)
     unit = Unit(
         uid=uid,
         definition_id=definition.unit_id,
@@ -43,7 +47,7 @@ def spawn_unit(
         debuff_res=dict(definition.debuff_res),
         max_toughness=definition.max_toughness,
         current_toughness=definition.max_toughness,
-        action_gauge=ACTION_GAUGE_FULL,
+        action_gauge=ACTION_GAUGE_FULL * definition.initial_delay_ratio,
         max_energy=definition.max_energy,
         energy=0.0,
     )

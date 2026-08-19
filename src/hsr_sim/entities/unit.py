@@ -88,6 +88,18 @@ class Unit:
     #: 걸려 있는 상태 효과. 순수 데이터이며 동작은 레지스트리의 정의가 담당한다.
     effects: List["StatusEffect"] = field(default_factory=list)
 
+    # --- 적 AI 런타임 상태 (docs/mechanics.md 7장) ---
+    #: 현재 페이즈. 스킬/결정의 사용 가능 여부를 가른다.
+    phase: int = 1
+    #: 고정 스킬 순환의 다음 위치
+    sequence_index: int = 0
+    #: 스킬별 남은 쿨다운 (자신의 턴 기준)
+    skill_cooldowns: Dict[str, int] = field(default_factory=dict)
+    #: AI 내부 카운터 (게임의 DynamicValue 에 대응)
+    counters: Dict[str, float] = field(default_factory=dict)
+    #: 이번 턴에 사용한 스킬의 행동 게이지 배수. 턴 종료 시 적용되고 1.0 으로 돌아간다.
+    pending_delay_ratio: float = 1.0
+
     #: 향후 메커니즘이 임의의 값을 붙일 수 있는 확장 슬롯
     #: (에너지, 스택 카운터 등. 엔진 코어를 고치지 않고 확장하기 위함)
     extra: Dict[str, Any] = field(default_factory=dict)
@@ -166,5 +178,10 @@ class Unit:
             res_overrides=dict(self.res_overrides),
             debuff_res=dict(self.debuff_res),
             effects=[e.clone() for e in self.effects],
+            phase=self.phase,
+            sequence_index=self.sequence_index,
+            skill_cooldowns=dict(self.skill_cooldowns),
+            counters=dict(self.counters),
+            pending_delay_ratio=self.pending_delay_ratio,
             extra=dict(self.extra),
         )

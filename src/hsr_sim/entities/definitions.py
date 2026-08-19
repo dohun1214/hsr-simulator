@@ -102,6 +102,12 @@ class SkillDefinition:
     #: 자료가 "적에 따라 다르다"고만 하므로 데이터로 둔다. docs/mechanics.md 4.4
     energy_grant_to_target: float = 0.0
 
+    #: 이 스킬 사용 후의 행동 게이지 배수 (게임 데이터의 DelayRatio).
+    #: 1.0 이 기본이고 1.5 면 다음 턴이 1.5배 늦게 온다. docs/mechanics.md 7.5
+    delay_ratio: float = 1.0
+    #: 사용 가능한 페이즈 (게임 데이터의 PhaseList). 비어 있으면 제한 없음.
+    phases: Tuple[int, ...] = ()
+
     #: 이 스킬이 대상에게 거는 상태 효과: (effect_id, 기본 확률)
     inflicts: Tuple[Tuple[str, float], ...] = ()
     #: 이 스킬이 시전자 자신에게 거는 상태 효과
@@ -146,6 +152,9 @@ class StatusEffectDefinition:
     stat_modifiers: Tuple[StatModifier, ...] = ()
     #: 지속 피해 (없으면 None)
     dot: Optional[DotSpec] = None
+    #: 저항 조회에 쓰이는 태그. 게임 데이터의 DebuffResist 키에 대응.
+    #: 예: 빙결 -> ("STAT_CTRL", "STAT_CTRL_Frozen"). docs/mechanics.md 7.6
+    resist_tags: Tuple[str, ...] = ()
 
     #: 미래 메커니즘용 확장 슬롯
     extra: Dict[str, float] = field(default_factory=dict)
@@ -181,9 +190,20 @@ class UnitDefinition:
     max_toughness: float = 0.0
     #: 기본 어그로 직접 지정 (None 이면 운명의 길에서 결정). docs/mechanics.md 6.1
     base_aggro: Optional[float] = None
+    #: 전투 시작 시 행동 게이지 배수 (게임 데이터의 InitialDelayRatio). docs/mechanics.md 7.5
+    initial_delay_ratio: float = 1.0
+    #: 기본 효과 저항 (게임 데이터의 StatusResistanceBase). 적은 보통 0.1~0.3.
+    #: None 이면 적용하지 않는다. docs/mechanics.md 7.6
+    status_resistance: Optional[float] = None
+    #: 적 AI 정의 id (ENEMY_AI 레지스트리 키)
+    ai_id: Optional[str] = None
+    #: 고정 스킬 순환 목록 (게임 데이터의 AISkillSequence)
+    skill_sequence: Tuple[str, ...] = ()
     #: 이벤트에 반응하는 패시브/특성 구현 id 목록 (레지스트리 키)
     ability_ids: Tuple[str, ...] = ()
     #: 적 AI / 자동 행동 선택기 id (레지스트리 키)
     behavior_id: str = "basic_attack_aggro"
-    #: 특정 디버프에 대한 개별 저항 (effect_id -> 저항값). 근거: docs/mechanics.md 5.4
+    #: 상태 이상 **태그**별 저항 (tag -> 저항값).
+    #: 게임 데이터의 DebuffResist 가 효과 id 가 아니라 태그 단위다.
+    #: 예: {"STAT_CTRL": 1.0, "STAT_DOT_Burn": 0.3}. docs/mechanics.md 7.6
     debuff_res: Dict[str, float] = field(default_factory=dict)
