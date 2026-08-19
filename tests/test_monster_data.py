@@ -170,3 +170,27 @@ def test_real_enemy_can_fight():
 def test_unknown_monster_id_raises():
     with pytest.raises(KeyError):
         monsters.build_definition(999999999)
+
+
+# --- 스테이지가 정하는 스케일링 곡선 ---------------------------------------
+
+
+def test_hard_level_group_comes_from_the_stage_not_the_monster(data):
+    """`HardLevelGroup` 은 몬스터가 아니라 스테이지가 지정한다.
+
+    `MonsterConfig` 상의 값은 전부 1 이지만 `StageConfig` 는 1/2/3 을 쓴다.
+    같은 적, 같은 레벨이라도 스테이지에 따라 체력이 크게 달라진다.
+    """
+    assert {m["hard_level_group"] for m in data["monsters"]} == {1}
+    hard = data["level_scaling"]["hard_level"]
+    assert hard["1"]["80"]["hp"] == pytest.approx(148.01102)
+    assert hard["2"]["80"]["hp"] == pytest.approx(427.77, abs=0.5)
+    assert hard["3"]["80"]["hp"] == pytest.approx(170.21, abs=0.5)
+
+
+def test_hard_level_group_override_changes_stats():
+    default = monsters.build_definition(ICE_EDGE, level=80)
+    tougher = monsters.build_definition(ICE_EDGE, level=80, hard_level_group=2)
+    ratio = tougher.base_stats[Stat.MAX_HP] / default.base_stats[Stat.MAX_HP]
+    assert ratio == pytest.approx(427.77 / 148.01102, rel=1e-3)
+    assert tougher.base_stats[Stat.ATK] > default.base_stats[Stat.ATK]

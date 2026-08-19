@@ -64,8 +64,24 @@ def _index(path: Optional[str] = None) -> Dict[int, Dict[str, Any]]:
     return {m["id"]: m for m in load_data(path)["monsters"]}
 
 
-def _scaling(data: Dict[str, Any], monster: Dict[str, Any], level: int) -> Dict[str, float]:
-    hard_table = data["level_scaling"]["hard_level"].get(str(monster["hard_level_group"]), {})
+def _scaling(
+    data: Dict[str, Any],
+    monster: Dict[str, Any],
+    level: int,
+    hard_level_group: Optional[int] = None,
+) -> Dict[str, float]:
+    """레벨/등급 배율.
+
+    **중요**: `HardLevelGroup` 은 몬스터가 아니라 **스테이지가 지정한다.**
+    `MonsterConfig` 상의 값은 전부 1 이지만 `StageConfig` 는 1/2/3 을 쓰며,
+    같은 레벨에서도 곡선이 크게 다르다 (Lv80 기준 HP 배수 148 / 428 / 170).
+    엔드게임 스테이지의 상당수가 2 또는 3 을 쓴다.
+
+    따라서 특정 스테이지의 적을 재현하려면 `hard_level_group` 을 직접 지정해야 한다.
+    지정하지 않으면 몬스터 데이터의 값(=1)을 쓴다. docs/data_sources.md 참고.
+    """
+    group = hard_level_group if hard_level_group is not None else monster["hard_level_group"]
+    hard_table = data["level_scaling"]["hard_level"].get(str(group), {})
     hard = hard_table.get(str(level))
     if hard is None and hard_table:
         # 해당 레벨이 없으면 가장 가까운 낮은 레벨을 쓴다
@@ -118,14 +134,18 @@ def build_definition(
     level: int = 80,
     path: Optional[str] = None,
     assume_first_param: bool = False,
+    hard_level_group: Optional[int] = None,
 ) -> UnitDefinition:
-    """실제 적 하나를 `UnitDefinition` 으로 만든다 (레지스트리 등록은 하지 않는다)."""
+    """실제 적 하나를 `UnitDefinition` 으로 만든다 (레지스트리 등록은 하지 않는다).
+
+    ``hard_level_group`` 은 스테이지가 정하는 스케일링 곡선이다 (`_scaling` 설명 참고).
+    """
     data = load_data(path)
     monster = _index(path).get(monster_id)
     if monster is None:
         raise KeyError(f"등록되지 않은 적 id: {monster_id}")
 
-    scale = _scaling(data, monster, level)
+    scale = _scaling(data, monster, level, hard_level_group)
     base, ratio = monster["base"], monster["ratio"]
 
     def stat(key: str) -> float:
@@ -185,13 +205,14 @@ def register(
     level: int = 80,
     path: Optional[str] = None,
     assume_first_param: bool = False,
+    hard_level_group: Optional[int] = None,
 ) -> UnitDefinition:
     """정의를 만들고 레지스트리에 등록한다. 이미 있으면 그대로 돌려준다."""
     unit_id = f"monster_{monster_id}"
     existing = UNIT_DEFINITIONS.try_get(unit_id)
     if existing is not None:
         return existing
-    definition = build_definition(monster_id, level, path, assume_first_param)
+    definition = build_definition(monster_id, level, path, assume_first_param, hard_level_group)
     UNIT_DEFINITIONS.register(unit_id, definition)
     return definition
 
