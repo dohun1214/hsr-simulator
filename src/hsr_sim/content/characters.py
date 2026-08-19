@@ -134,13 +134,36 @@ def _skill_definition(
     )
 
 
+#: 행적 스탯 이름 -> 우리 Stat
+_TRACE_STATS = {
+    "atk": Stat.ATK, "def": Stat.DEF, "max_hp": Stat.MAX_HP, "spd": Stat.SPD,
+    "crit_rate": Stat.CRIT_RATE, "crit_dmg": Stat.CRIT_DMG,
+    "effect_res": Stat.EFFECT_RES, "effect_hit_rate": Stat.EFFECT_HIT_RATE,
+    "break_effect": Stat.BREAK_EFFECT, "energy_regen_rate": Stat.ENERGY_REGEN_RATE,
+    "outgoing_healing": Stat.OUTGOING_HEALING,
+}
+
+
+def major_traces(character_id: int, path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """특성(주요 행적) 목록. `affects_damage` 가 True 면 피해 계산에 개입할 수 있다."""
+    character = _index(path).get(character_id)
+    if character is None:
+        raise KeyError(f"등록되지 않은 캐릭터 id: {character_id}")
+    return [t for t in character.get("traces") or [] if t["type"] == "major"]
+
+
 def build_definition(
     character_id: int,
     level: int = 80,
     skill_levels: Union[int, Dict[str, int], None] = None,
     path: Optional[str] = None,
+    with_traces: bool = False,
 ) -> UnitDefinition:
-    """실제 캐릭터 하나를 `UnitDefinition` 으로 만든다 (광추/유물/행적 제외)."""
+    """실제 캐릭터 하나를 `UnitDefinition` 으로 만든다.
+
+    ``with_traces=True`` 면 **스탯 행적을 모두 찍은 상태**의 보너스를 더한다.
+    광추/유물/성혼은 여전히 포함되지 않는다.
+    """
     data = load_data(path)
     character = _index(path).get(character_id)
     if character is None:
@@ -161,24 +184,39 @@ def build_definition(
         skills[definition.skill_id] = definition
         slots.setdefault(raw["kind"], definition.skill_id)
 
+    base_stats = {
+        Stat.MAX_HP: promotion["hp"]["base"] + promotion["hp"]["add"] * step,
+        Stat.ATK: promotion["atk"]["base"] + promotion["atk"]["add"] * step,
+        Stat.DEF: promotion["def"]["base"] + promotion["def"]["add"] * step,
+        Stat.SPD: promotion["spd"],
+        Stat.CRIT_RATE: promotion["crit_rate"],
+        Stat.CRIT_DMG: promotion["crit_dmg"],
+        Stat.AGGRO: promotion["aggro"],
+    }
+    extra: Dict[str, Any] = {}
+    if with_traces:
+        totals = character.get("trace_stat_totals") or {}
+        for key, amounts in totals.items():
+            stat = _TRACE_STATS.get(key)
+            if stat is not None:
+                current = base_stats.get(stat, 0.0)
+                base_stats[stat] = current * (1.0 + amounts["percent"]) + amounts["flat"]
+            elif key.startswith("dmg_"):
+                bonus = extra.setdefault("elemental_dmg_bonus", {})
+                element = key[len("dmg_"):]
+                bonus[element] = bonus.get(element, 0.0) + amounts["flat"] + amounts["percent"]
+
     name = character["name"]
     return UnitDefinition(
         unit_id=f"character_{character_id}",
+        extra=extra,
         name=LocalizedName(
             ko=name.get("ko") or "", en=name.get("en") or "", ko_verified=bool(name.get("ko"))
         ),
         default_side=Side.ALLY,
         element=_ELEMENTS.get(character.get("element") or "") or Element.PHYSICAL,
         path=_PATHS.get(character.get("path") or ""),
-        base_stats={
-            Stat.MAX_HP: promotion["hp"]["base"] + promotion["hp"]["add"] * step,
-            Stat.ATK: promotion["atk"]["base"] + promotion["atk"]["add"] * step,
-            Stat.DEF: promotion["def"]["base"] + promotion["def"]["add"] * step,
-            Stat.SPD: promotion["spd"],
-            Stat.CRIT_RATE: promotion["crit_rate"],
-            Stat.CRIT_DMG: promotion["crit_dmg"],
-            Stat.AGGRO: promotion["aggro"],
-        },
+        base_stats=base_stats,
         skills=skills,
         basic_attack_id=slots.get("basic", ""),
         skill_id=slots.get("skill"),
@@ -193,12 +231,13 @@ def register(
     level: int = 80,
     skill_levels: Union[int, Dict[str, int], None] = None,
     path: Optional[str] = None,
+    with_traces: bool = False,
 ) -> UnitDefinition:
     unit_id = f"character_{character_id}"
     existing = UNIT_DEFINITIONS.try_get(unit_id)
     if existing is not None:
         return existing
-    definition = build_definition(character_id, level, skill_levels, path)
+    definition = build_definition(character_id, level, skill_levels, path, with_traces)
     UNIT_DEFINITIONS.register(unit_id, definition)
     return definition
 
