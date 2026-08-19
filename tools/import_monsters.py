@@ -81,6 +81,15 @@ def value(node: Any, default: float = 0.0) -> float:
     return float(node)
 
 
+#: 개척자는 이름이 플레이어 닉네임 자리표시자로 되어 있다.
+NICKNAME = {"ko": "개척자", "en": "Trailblazer"}
+
+
+def _normalize(text: str) -> str:
+    """게임 텍스트 정리: U+00A0(줄바꿈 없는 공백)을 일반 공백으로."""
+    return text.replace("\u00a0", " ").replace("\u2007", " ").strip()
+
+
 class TextMap:
     """해시 -> 현지화 문자열."""
 
@@ -95,10 +104,7 @@ class TextMap:
         if not isinstance(node, dict):
             return None
         text = self.table.get(str(node.get("Hash")))
-        if text is None:
-            return None
-        # 게임 텍스트는 줄바꿈 없는 공백(U+00A0)을 쓴다
-        return text.replace(" ", " ").strip()
+        return _normalize(text) if text is not None else None
 
 
 def fetch(cache: str) -> str:
