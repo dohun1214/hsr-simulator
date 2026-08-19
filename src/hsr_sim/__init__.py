@@ -6,6 +6,7 @@
 __version__ = "0.1.0"
 
 from .battle import engine as _engine  # noqa: F401  (행동 처리기/행동 선택기 등록)
+from .content import effects as _effects  # noqa: F401  (테스트 상태 효과 등록)
 from .content import dummies as _dummies  # noqa: F401  (테스트 유닛 등록)
 
 from .battle.engine import BattleEngine  # noqa: E402

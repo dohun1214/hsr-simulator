@@ -43,6 +43,8 @@ def combat_skill(
     multiplier: float,
     shape: str = "single",
     adjacent_multiplier: Optional[float] = None,
+    inflicts: tuple = (),
+    self_effects: tuple = (),
 ) -> SkillDefinition:
     """전투 스킬: 스킬 포인트 -1, 에너지 +30"""
     return SkillDefinition(
@@ -55,10 +57,17 @@ def combat_skill(
         target_rule=TargetRule(side="enemy", shape=shape),
         sp_cost=1,
         energy_gain=30.0,
+        inflicts=inflicts,
+        self_effects=self_effects,
     )
 
 
-def ultimate_skill(multiplier: float, max_energy: float, shape: str = "single") -> SkillDefinition:
+def ultimate_skill(
+    multiplier: float,
+    max_energy: float,
+    shape: str = "single",
+    inflicts: tuple = (),
+) -> SkillDefinition:
     """필살기: 에너지 전량 소모, 사용 후 +5"""
     return SkillDefinition(
         skill_id="ultimate",
@@ -69,6 +78,7 @@ def ultimate_skill(multiplier: float, max_energy: float, shape: str = "single") 
         target_rule=TargetRule(side="enemy", shape=shape),
         energy_cost=max_energy,
         energy_gain=5.0,
+        inflicts=inflicts,
     )
 
 
@@ -124,6 +134,37 @@ TEST_ALLY_B = UnitDefinition(
     ultimate_id="ultimate",
     max_energy=110.0,
     behavior_id="basic_attack_lowest_hp",
+)
+
+#: 상태 효과 검증용 아군. 스킬로 방어력 감소, 필살기로 화상을 건다.
+TEST_ALLY_C = UnitDefinition(
+    unit_id="test_ally_c",
+    name=_name("테스트 아군 C", "Test Ally C"),
+    default_side=Side.ALLY,
+    element=Element.WIND,
+    path=Path.NIHILITY,
+    base_stats={
+        Stat.MAX_HP: 1100.0,
+        Stat.ATK: 800.0,
+        Stat.DEF: 450.0,
+        Stat.SPD: 105.0,
+        Stat.CRIT_RATE: 0.0,
+        Stat.CRIT_DMG: 0.5,
+        Stat.EFFECT_HIT_RATE: 0.0,
+        Stat.ENERGY_REGEN_RATE: 0.0,
+    },
+    skills={
+        "basic": basic_skill(1.0),
+        "skill": combat_skill(1.0, inflicts=(("test_def_down", 1.0),)),
+        "ultimate": ultimate_skill(
+            1.0, max_energy=100.0, shape="aoe", inflicts=(("test_burn", 1.0),)
+        ),
+    },
+    basic_attack_id="basic",
+    skill_id="skill",
+    ultimate_id="ultimate",
+    max_energy=100.0,
+    behavior_id="skill_then_basic",
 )
 
 TEST_ENEMY_A = UnitDefinition(
@@ -184,5 +225,12 @@ TEST_ENEMY_C = UnitDefinition(
 )
 
 
-for _definition in (TEST_ALLY_A, TEST_ALLY_B, TEST_ENEMY_A, TEST_ENEMY_B, TEST_ENEMY_C):
+for _definition in (
+    TEST_ALLY_A,
+    TEST_ALLY_B,
+    TEST_ALLY_C,
+    TEST_ENEMY_A,
+    TEST_ENEMY_B,
+    TEST_ENEMY_C,
+):
     UNIT_DEFINITIONS.register(_definition.unit_id, _definition)
