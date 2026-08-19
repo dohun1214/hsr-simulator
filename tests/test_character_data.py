@@ -176,3 +176,65 @@ def test_real_party_fights_real_enemy():
 def test_unknown_character_raises():
     with pytest.raises(KeyError):
         characters.build_definition(999999)
+
+
+# --- 행적 -----------------------------------------------------------------
+
+KAFKA = 1005
+
+
+def test_traces_are_imported(data):
+    kafka = next(c for c in data["characters"] if c["id"] == KAFKA)
+    kinds = {t["type"] for t in kafka["traces"]}
+    assert {"stat", "skill_level", "major"} <= kinds
+
+
+def test_major_traces_have_korean_text_from_starrailres(data):
+    """주요 행적 이름은 원본에서 문자열 키로만 참조되어 StarRailRes 로 보충한다."""
+    majors = [t for c in data["characters"] for t in c["traces"] if t["type"] == "major"]
+    assert majors
+    assert all(t["name"]["ko"] for t in majors)
+
+
+def test_trace_stat_totals_are_summed(data):
+    """스탯 행적을 모두 찍었을 때의 합계."""
+    kafka = next(c for c in data["characters"] if c["id"] == KAFKA)
+    totals = kafka["trace_stat_totals"]
+    assert totals["atk"]["percent"] == pytest.approx(0.56)
+    assert totals["effect_hit_rate"]["flat"] == pytest.approx(0.36)
+    assert totals["max_hp"]["percent"] == pytest.approx(0.20)
+
+
+def test_with_traces_increases_stats():
+    plain = characters.build_definition(KAFKA, level=80)
+    traced = characters.build_definition(KAFKA, level=80, with_traces=True)
+    assert traced.base_stats[Stat.ATK] == pytest.approx(plain.base_stats[Stat.ATK] * 1.56)
+    assert traced.base_stats[Stat.EFFECT_HIT_RATE] == pytest.approx(0.36)
+
+
+def test_elemental_damage_traces_go_to_extra():
+    """속성 피해 증가 행적은 스탯이 아니라 속성별 보너스로 들어간다."""
+    traced = characters.build_definition(MARCH_7TH, level=80, with_traces=True)
+    bonus = traced.extra.get("elemental_dmg_bonus") or {}
+    assert bonus.get("ice", 0.0) > 0.0
+
+
+def test_elemental_damage_bonus_reaches_the_damage_pipeline():
+    from hsr_sim.setup import spawn_unit
+
+    traced = characters.build_definition(MARCH_7TH, level=80, with_traces=True)
+    unit = spawn_unit(traced, "A1", level=80)
+    assert unit.extra["elemental_dmg_bonus"]["ice"] > 0.0
+
+
+def test_damage_affecting_traces_are_flagged(data):
+    kafka = next(c for c in data["characters"] if c["id"] == KAFKA)
+    flagged = [t for t in kafka["traces"] if t["affects_damage"]]
+    assert flagged
+    assert all(t["type"] == "major" for t in flagged)
+
+
+def test_major_traces_helper():
+    majors = characters.major_traces(KAFKA)
+    assert len(majors) >= 3
+    assert any(t["affects_damage"] for t in majors)
