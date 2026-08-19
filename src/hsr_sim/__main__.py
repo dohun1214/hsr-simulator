@@ -143,9 +143,65 @@ def demo_monster(config: BattleConfig, query: str, level: int) -> None:
     print("※ 적 스킬의 피해 배율은 게임 데이터에서 복원하지 못했습니다. docs/data_sources.md 참고")
 
 
+def demo_verify(config: BattleConfig, character_query: str, enemy_query: str,
+                level: int, enemy_level: int) -> None:
+    """실제 게임과 대조할 수 있는 피해 계산 명세를 출력한다 (요구사항 13).
+
+    광추/유물/행적은 아직 임포트하지 않았으므로 **캐릭터 본체 스탯만** 반영된다.
+    게임에서 장비를 모두 벗기고 비교하면 값이 맞아야 한다.
+    """
+    from .battle.damage import DamageContext, compute_damage
+    from .content import characters, monsters
+    from .core.enums import CritMode as _CritMode
+    from .setup import spawn_unit
+    from .stats.stat import Stat
+
+    found_c = characters.search(name=character_query, limit=1)
+    found_e = monsters.search(name=enemy_query, limit=1)
+    if not found_c or not found_e:
+        print("캐릭터 또는 적을 찾지 못했습니다.")
+        return
+
+    cdef = characters.build_definition(found_c[0]["id"], level=level)
+    edef = monsters.build_definition(found_e[0]["id"], level=enemy_level)
+    attacker = spawn_unit(cdef, "A1", level=level)
+    defender = spawn_unit(edef, "E1", level=enemy_level)
+
+    print(f"공격: {cdef.name.ko} Lv{level}  (광추/유물/행적 없음)")
+    print(f"  ATK {attacker.stat(Stat.ATK):.2f}  치확 {attacker.stat(Stat.CRIT_RATE):.0%}"
+          f"  치피 {attacker.stat(Stat.CRIT_DMG):.0%}")
+    print(f"방어: {edef.name.ko} Lv{enemy_level}")
+    print(f"  HP {defender.max_hp:,.0f}  DEF {defender.stat(Stat.DEF):.0f}"
+          f"  약점 {[w.value for w in edef.weaknesses]}")
+    print()
+
+    for skill in cdef.skills.values():
+        if not skill.multiplier_verified:
+            continue
+        ctx = DamageContext(
+            attacker=attacker, defender=defender,
+            element=skill.element or cdef.element,
+            multiplier=skill.multiplier, scaling=skill.scaling, tags=(skill.tag,),
+        )
+        result = compute_damage(ctx, crit_mode=_CritMode.NEVER)
+        crit = compute_damage(ctx, crit_mode=_CritMode.ALWAYS)
+        parts = "  ".join(f"{k} {v:.4f}" for k, v in result.breakdown.items() if k != "base")
+        print(f"[{skill.kind.value}] {skill.name.ko}  배율 {skill.multiplier:.0%} {skill.scaling.value}")
+        print(f"   기본 피해 {result.base_damage:,.1f}  ->  비치명타 {result.amount:,.1f}"
+              f" / 치명타 {crit.amount:,.1f}")
+        print(f"   배수: {parts}")
+    print("\n※ 게임에서 광추·유물을 모두 해제하고 같은 레벨로 비교하면 값이 일치해야 합니다.")
+    print("   차이가 나면 docs/roadmap.md 의 Open Questions 에 기록해 주세요.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="HSR 전투 시뮬레이터 V0.1 데모")
-    parser.add_argument("--mode", choices=["battle", "search", "monster"], default="battle")
+    parser.add_argument(
+        "--mode", choices=["battle", "search", "monster", "verify"], default="battle"
+    )
+    parser.add_argument("--character", default="단항", help="캐릭터 검색어 (--mode verify)")
+    parser.add_argument("--enemy", default="얼음 서슬", help="적 검색어 (--mode verify)")
+    parser.add_argument("--enemy-level", type=int, default=80)
     parser.add_argument("--monster", default="쿠쿠리아", help="적 이름 검색어 (--mode monster)")
     parser.add_argument("--level", type=int, default=80, help="적 레벨 (--mode monster)")
     parser.add_argument("--seed", type=int, default=1234)
@@ -155,7 +211,9 @@ def main() -> None:
     args = parser.parse_args()
 
     config = BattleConfig(seed=args.seed, crit_mode=CritMode(args.crit))
-    if args.mode == "monster":
+    if args.mode == "verify":
+        demo_verify(config, args.character, args.enemy, args.level, args.enemy_level)
+    elif args.mode == "monster":
         demo_monster(config, args.monster, args.level)
     elif args.mode == "search":
         demo_search(config)
