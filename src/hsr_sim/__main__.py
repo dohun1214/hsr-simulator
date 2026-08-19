@@ -143,12 +143,15 @@ def demo_monster(config: BattleConfig, query: str, level: int) -> None:
     print("※ 적 스킬의 피해 배율은 게임 데이터에서 복원하지 못했습니다. docs/data_sources.md 참고")
 
 
-def demo_verify(config: BattleConfig, character_query: str, enemy_query: str,
-                level: int, enemy_level: int) -> None:
-    """실제 게임과 대조할 수 있는 피해 계산 명세를 출력한다 (요구사항 13).
+def demo_verify(args) -> None:
+    """실제 게임과 대조할 피해 계산 명세를 출력한다 (요구사항 13).
 
-    광추/유물/행적은 아직 임포트하지 않았으므로 **캐릭터 본체 스탯만** 반영된다.
-    게임에서 장비를 모두 벗기고 비교하면 값이 맞아야 한다.
+    **게임 화면의 최종 스탯을 그대로 입력받는 것**이 핵심이다.
+    그러면 광추/유물/행적이 무엇이든 상관없이 **데미지 공식과 스킬 배율만** 검증된다.
+
+        python -m hsr_sim --mode verify --character 카프카 \
+            --atk 3200 --crit-rate 0.75 --crit-dmg 1.8 --dmg-bonus 0.466 \
+            --enemy "얼음 서슬" --enemy-level 80 --skill-level 10
     """
     from .battle.damage import DamageContext, compute_damage
     from .content import characters, monsters
@@ -156,42 +159,78 @@ def demo_verify(config: BattleConfig, character_query: str, enemy_query: str,
     from .setup import spawn_unit
     from .stats.stat import Stat
 
-    found_c = characters.search(name=character_query, limit=1)
-    found_e = monsters.search(name=enemy_query, limit=1)
-    if not found_c or not found_e:
-        print("캐릭터 또는 적을 찾지 못했습니다.")
+    found_c = characters.search(name=args.character, limit=1)
+    found_e = monsters.search(name=args.enemy, limit=1)
+    if not found_c:
+        print(f"'{args.character}' 캐릭터를 찾지 못했습니다.")
+        return
+    if not found_e:
+        print(f"'{args.enemy}' 적을 찾지 못했습니다.")
         return
 
-    cdef = characters.build_definition(found_c[0]["id"], level=level)
-    edef = monsters.build_definition(found_e[0]["id"], level=enemy_level)
-    attacker = spawn_unit(cdef, "A1", level=level)
-    defender = spawn_unit(edef, "E1", level=enemy_level)
+    cdef = characters.build_definition(
+        found_c[0]["id"], level=args.level,
+        skill_levels=args.skill_level, with_traces=args.traces,
+    )
+    edef = monsters.build_definition(found_e[0]["id"], level=args.enemy_level)
+    attacker = spawn_unit(cdef, "A1", level=args.level)
+    defender = spawn_unit(edef, "E1", level=args.enemy_level)
 
-    print(f"공격: {cdef.name.ko} Lv{level}  (광추/유물/행적 없음)")
-    print(f"  ATK {attacker.stat(Stat.ATK):.2f}  치확 {attacker.stat(Stat.CRIT_RATE):.0%}"
-          f"  치피 {attacker.stat(Stat.CRIT_DMG):.0%}")
-    print(f"방어: {edef.name.ko} Lv{enemy_level}")
-    print(f"  HP {defender.max_hp:,.0f}  DEF {defender.stat(Stat.DEF):.0f}"
-          f"  약점 {[w.value for w in edef.weaknesses]}")
+    # 게임 화면 값으로 덮어쓰기 (지정한 것만)
+    overrides = {
+        Stat.ATK: args.atk, Stat.CRIT_RATE: args.crit_rate, Stat.CRIT_DMG: args.crit_dmg,
+    }
+    manual = []
+    for stat, value in overrides.items():
+        if value is not None:
+            attacker.base_stats[stat] = value
+            manual.append(stat.value)
+
+    source = "게임 화면 입력값" if manual else (
+        "데이터 계산값 (행적 포함)" if args.traces else "데이터 계산값 (본체만)"
+    )
+    print(f"공격: {cdef.name.ko} Lv{args.level}  스킬 레벨 {args.skill_level}  [{source}]")
+    print(f"  ATK {attacker.stat(Stat.ATK):,.2f}   치확 {attacker.stat(Stat.CRIT_RATE):.1%}"
+          f"   치피 {attacker.stat(Stat.CRIT_DMG):.1%}   피해 증가 {args.dmg_bonus:.1%}")
+    print(f"방어: {edef.name.ko} Lv{args.enemy_level}")
+    print(f"  HP {defender.max_hp:,.0f}   DEF {defender.stat(Stat.DEF):,.0f}"
+          f"   약점 {[w.value for w in edef.weaknesses]}   격파됨 {args.broken}")
     print()
 
+    defender.toughness_broken = args.broken
     for skill in cdef.skills.values():
         if not skill.multiplier_verified:
+            print(f"[{skill.kind.value}] {skill.name.ko} — 배율 미해결 (건너뜀)")
             continue
+        element = skill.element or cdef.element
         ctx = DamageContext(
-            attacker=attacker, defender=defender,
-            element=skill.element or cdef.element,
+            attacker=attacker, defender=defender, element=element,
             multiplier=skill.multiplier, scaling=skill.scaling, tags=(skill.tag,),
+            dmg_bonus=args.dmg_bonus, res_pen=args.res_pen,
+            def_reduction=args.def_reduction, vulnerability=args.vulnerability,
         )
-        result = compute_damage(ctx, crit_mode=_CritMode.NEVER)
+        plain = compute_damage(ctx, crit_mode=_CritMode.NEVER)
         crit = compute_damage(ctx, crit_mode=_CritMode.ALWAYS)
-        parts = "  ".join(f"{k} {v:.4f}" for k, v in result.breakdown.items() if k != "base")
-        print(f"[{skill.kind.value}] {skill.name.ko}  배율 {skill.multiplier:.0%} {skill.scaling.value}")
-        print(f"   기본 피해 {result.base_damage:,.1f}  ->  비치명타 {result.amount:,.1f}"
-              f" / 치명타 {crit.amount:,.1f}")
-        print(f"   배수: {parts}")
-    print("\n※ 게임에서 광추·유물을 모두 해제하고 같은 레벨로 비교하면 값이 일치해야 합니다.")
-    print("   차이가 나면 docs/roadmap.md 의 Open Questions 에 기록해 주세요.")
+        print(f"[{skill.kind.value}] {skill.name.ko}   배율 {skill.multiplier:.0%} "
+              f"{skill.scaling.value}   {element.value}   {skill.target_rule.shape}")
+        print(f"   비치명타 {plain.amount:>12,.1f}      치명타 {crit.amount:>12,.1f}")
+        print("   배수: " + "  ".join(
+            f"{k} {v:.4f}" for k, v in plain.breakdown.items() if k not in ("base", "crit")
+        ))
+
+    warnings = [t for t in characters.major_traces(found_c[0]["id"]) if t["affects_damage"]]
+    if warnings:
+        print("\n※ 이 캐릭터의 특성 중 피해에 개입할 수 있는 것:")
+        for trace in warnings:
+            name = trace["name"]["ko"] or trace["name"]["en"] or trace["point_id"]
+            desc = (trace["desc"]["ko"] or "").replace("\n", " ")[:90]
+            print(f"   - {name}: {desc}")
+        print("   측정할 때 이 조건들이 발동하지 않는 상황을 고르세요.")
+
+    print("\n측정 방법")
+    print("  1. 버프/디버프 없는 상태에서 첫 턴에 공격 (적 미격파, HP 만피)")
+    print("  2. 비치명타 값을 기록 (치명타는 노란색으로 표시됨)")
+    print("  3. 위 '비치명타' 값과 비교")
 
 
 def main() -> None:
@@ -202,6 +241,16 @@ def main() -> None:
     parser.add_argument("--character", default="단항", help="캐릭터 검색어 (--mode verify)")
     parser.add_argument("--enemy", default="얼음 서슬", help="적 검색어 (--mode verify)")
     parser.add_argument("--enemy-level", type=int, default=80)
+    parser.add_argument("--skill-level", type=int, default=10, help="스킬 레벨 (--mode verify)")
+    parser.add_argument("--traces", action="store_true", help="스탯 행적을 모두 찍은 것으로 계산")
+    parser.add_argument("--broken", action="store_true", help="적이 약점 격파된 상태")
+    parser.add_argument("--atk", type=float, help="게임 화면의 최종 공격력")
+    parser.add_argument("--crit-rate", type=float, help="게임 화면의 치명타 확률 (0.75)")
+    parser.add_argument("--crit-dmg", type=float, help="게임 화면의 치명타 피해 (1.8)")
+    parser.add_argument("--dmg-bonus", type=float, default=0.0, help="속성 피해 증가 (0.466)")
+    parser.add_argument("--res-pen", type=float, default=0.0, help="속성 저항 관통")
+    parser.add_argument("--def-reduction", type=float, default=0.0, help="방어력 감소")
+    parser.add_argument("--vulnerability", type=float, default=0.0, help="받는 피해 증가")
     parser.add_argument("--monster", default="쿠쿠리아", help="적 이름 검색어 (--mode monster)")
     parser.add_argument("--level", type=int, default=80, help="적 레벨 (--mode monster)")
     parser.add_argument("--seed", type=int, default=1234)
@@ -212,7 +261,7 @@ def main() -> None:
 
     config = BattleConfig(seed=args.seed, crit_mode=CritMode(args.crit))
     if args.mode == "verify":
-        demo_verify(config, args.character, args.enemy, args.level, args.enemy_level)
+        demo_verify(args)
     elif args.mode == "monster":
         demo_monster(config, args.monster, args.level)
     elif args.mode == "search":
