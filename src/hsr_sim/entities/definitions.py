@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from ..core.enums import (
     DamageTag,
@@ -203,6 +203,8 @@ class UnitDefinition:
     ai_id: Optional[str] = None
     #: 고정 스킬 순환 목록 (게임 데이터의 AISkillSequence)
     skill_sequence: Tuple[str, ...] = ()
+    #: 유닛 생성 시 `Unit.extra` 로 복사되는 값 (속성별 피해 증가 등)
+    extra: Dict[str, Any] = field(default_factory=dict)
     #: 이벤트에 반응하는 패시브/특성 구현 id 목록 (레지스트리 키)
     ability_ids: Tuple[str, ...] = ()
     #: 적 AI / 자동 행동 선택기 id (레지스트리 키)

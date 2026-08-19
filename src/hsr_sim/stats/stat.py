@@ -29,6 +29,8 @@ class Stat(Enum):
     EFFECT_RES = "effect_res"
     ENERGY_REGEN_RATE = "energy_regen_rate"
     OUTGOING_HEALING = "outgoing_healing"
+    #: 전 속성 피해 증가 (속성별 보너스는 Unit.extra["elemental_dmg_bonus"] 에 둔다)
+    DMG_BONUS = "dmg_bonus"
     #: 어그로(도발치). 적이 이 캐릭터를 노릴 상대적 가중치.
     #: 게임의 `기본 어그로 x (1 + 수정자 합)` 이 우리 스탯 계산식과 동일하므로
     #: 별도 시스템이 아니라 일반 스탯으로 둔다. 근거: docs/mechanics.md 6.3
@@ -47,6 +49,7 @@ STAT_NAMES_KO = {
     Stat.EFFECT_RES: "효과 저항",
     Stat.ENERGY_REGEN_RATE: "에너지 회복 효율",
     Stat.OUTGOING_HEALING: "치유량",
+    Stat.DMG_BONUS: "피해 증가",
     Stat.AGGRO: "어그로",
 }
 
@@ -61,6 +64,7 @@ ADDITIVE_ONLY_STATS = frozenset(
         Stat.EFFECT_RES,
         Stat.ENERGY_REGEN_RATE,
         Stat.OUTGOING_HEALING,
+        Stat.DMG_BONUS,
     }
 )
 

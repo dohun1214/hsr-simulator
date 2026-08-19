@@ -50,6 +50,7 @@ def spawn_unit(
         action_gauge=ACTION_GAUGE_FULL * definition.initial_delay_ratio,
         max_energy=definition.max_energy,
         energy=0.0,
+        extra=dict(definition.extra),
     )
     unit.current_hp = unit.max_hp
     return unit

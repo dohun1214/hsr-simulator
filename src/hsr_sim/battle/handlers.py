@@ -12,6 +12,7 @@ from typing import List, Optional
 
 from ..core.enums import Side, SkillKind
 from ..registries import ACTION_HANDLERS, UNIT_DEFINITIONS
+from ..stats.stat import Stat
 from .actions import BasicAttackAction, SkillAction, SkipAction, UltimateAction, UseSkillAction
 from .damage import DamageContext
 from . import status
@@ -69,10 +70,15 @@ def execute_skill(engine, state, action) -> None:
         multiplier = skill.multiplier
         if target.uid != primary.uid and skill.adjacent_multiplier is not None:
             multiplier = skill.adjacent_multiplier
+        # 시전자의 피해 증가 = 전 속성 + 해당 속성 (행적/광추/유물에서 온다)
+        elemental = (actor.extra.get("elemental_dmg_bonus") or {}).get(
+            element.value if element else "", 0.0
+        )
         ctx = DamageContext(
             attacker=actor,
             defender=target,
             element=element,
+            dmg_bonus=actor.stat(Stat.DMG_BONUS) + elemental,
             multiplier=multiplier,
             scaling=skill.scaling,
             flat_bonus=skill.flat_bonus,
