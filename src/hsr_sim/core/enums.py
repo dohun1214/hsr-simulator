@@ -54,6 +54,7 @@ class Path(Enum):
     PRESERVATION = "preservation"
     ABUNDANCE = "abundance"
     REMEMBRANCE = "remembrance"
+    ELATION = "elation"
 
 
 PATH_NAMES_KO = {
@@ -65,6 +66,7 @@ PATH_NAMES_KO = {
     Path.PRESERVATION: "보존",
     Path.ABUNDANCE: "풍요",
     Path.REMEMBRANCE: "기억",
+    Path.ELATION: "환락",
 }
 
 

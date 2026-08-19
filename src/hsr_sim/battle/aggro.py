@@ -19,7 +19,9 @@ from ..core.enums import Path
 from ..entities.unit import Unit
 from ..stats.stat import Stat
 
-#: 운명의 길별 기본 어그로. 근거: docs/mechanics.md 6.1 (3개 자료 교차검증)
+#: 운명의 길별 기본 어그로.
+#: 근거: docs/mechanics.md 6.1 — **게임 데이터 `AvatarPromotionConfig.BaseAggro` 로 직접 확인됨**
+#: (Knight 150 / Warrior 125 / Shaman·Warlock·Priest·Memory·Elation 100 / Rogue·Mage 75)
 PATH_BASE_AGGRO: Dict[Path, float] = {
     Path.PRESERVATION: 150.0,
     Path.DESTRUCTION: 125.0,
@@ -27,6 +29,7 @@ PATH_BASE_AGGRO: Dict[Path, float] = {
     Path.NIHILITY: 100.0,
     Path.ABUNDANCE: 100.0,
     Path.REMEMBRANCE: 100.0,
+    Path.ELATION: 100.0,
     Path.HUNT: 75.0,
     Path.ERUDITION: 75.0,
 }
