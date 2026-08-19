@@ -29,6 +29,10 @@ class Stat(Enum):
     EFFECT_RES = "effect_res"
     ENERGY_REGEN_RATE = "energy_regen_rate"
     OUTGOING_HEALING = "outgoing_healing"
+    #: 어그로(도발치). 적이 이 캐릭터를 노릴 상대적 가중치.
+    #: 게임의 `기본 어그로 x (1 + 수정자 합)` 이 우리 스탯 계산식과 동일하므로
+    #: 별도 시스템이 아니라 일반 스탯으로 둔다. 근거: docs/mechanics.md 6.3
+    AGGRO = "aggro"
 
 
 STAT_NAMES_KO = {
@@ -43,6 +47,7 @@ STAT_NAMES_KO = {
     Stat.EFFECT_RES: "효과 저항",
     Stat.ENERGY_REGEN_RATE: "에너지 회복 효율",
     Stat.OUTGOING_HEALING: "치유량",
+    Stat.AGGRO: "어그로",
 }
 
 #: 이 스탯들은 "기본값의 %" 개념이 없고 가산만 존재한다 (치확 +10% 등).

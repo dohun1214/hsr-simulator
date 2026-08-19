@@ -13,6 +13,7 @@ from .entities.definitions import UnitDefinition
 from .entities.unit import ACTION_GAUGE_FULL, Unit
 from .registries import UNIT_DEFINITIONS
 from .stats.stat import Stat
+from .battle.aggro import base_aggro_for
 from .battle.state import BattleConfig, BattleState
 
 
@@ -24,13 +25,19 @@ def spawn_unit(
     level: int = 80,
 ) -> Unit:
     side = side or definition.default_side
+    base_stats = dict(definition.base_stats)
+    # 어그로는 운명의 길에서 유도된다 (데이터에 명시되어 있으면 그쪽 우선).
+    # 근거: docs/mechanics.md 6.1
+    base_stats.setdefault(
+        Stat.AGGRO, base_aggro_for(definition.path, definition.base_aggro)
+    )
     unit = Unit(
         uid=uid,
         definition_id=definition.unit_id,
         side=side,
         slot=slot,
         level=level,
-        base_stats=dict(definition.base_stats),
+        base_stats=base_stats,
         weaknesses=frozenset(definition.weaknesses),
         res_overrides=dict(definition.res_overrides),
         debuff_res=dict(definition.debuff_res),

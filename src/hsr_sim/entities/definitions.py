@@ -57,6 +57,12 @@ class TargetRule:
 
     side: str = "enemy"  # "enemy" | "ally" | "self"
     shape: str = "single"  # "single" | "blast" | "aoe"
+    #: 자동 선택 시 주 대상을 고르는 방식.
+    #:   "aggro"   - 어그로 가중 확률 (적이 아군을 고르는 기본 방식)
+    #:   "uniform" - 균등 확률 (Bounce 계열처럼 어그로를 무시하는 공격)
+    #:   "lowest_hp" / "highest_hp" - 결정론적 선택
+    #: 근거: docs/mechanics.md 6.2, 6.4
+    selection: str = "aggro"
     #: blast/aoe 에서 인접 대상에 적용될 배율 (V0.1 미사용)
     adjacent_ratio: float = 0.0
 
@@ -173,9 +179,11 @@ class UnitDefinition:
     res_overrides: Dict[Element, float] = field(default_factory=dict)
     #: 최대 인성치 (V0.1 에서는 저장만 하고 사용하지 않음)
     max_toughness: float = 0.0
+    #: 기본 어그로 직접 지정 (None 이면 운명의 길에서 결정). docs/mechanics.md 6.1
+    base_aggro: Optional[float] = None
     #: 이벤트에 반응하는 패시브/특성 구현 id 목록 (레지스트리 키)
     ability_ids: Tuple[str, ...] = ()
     #: 적 AI / 자동 행동 선택기 id (레지스트리 키)
-    behavior_id: str = "basic_attack_random"
+    behavior_id: str = "basic_attack_aggro"
     #: 특정 디버프에 대한 개별 저항 (effect_id -> 저항값). 근거: docs/mechanics.md 5.4
     debuff_res: Dict[str, float] = field(default_factory=dict)
