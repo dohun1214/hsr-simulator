@@ -49,7 +49,8 @@ src/hsr_sim/
     definitions.py UnitDefinition / SkillDefinition / LocalizedName / TargetRule (불변 데이터)
     unit.py        Unit (전투 중 변하는 상태)
   battle/
-    state.py       BattleState, BattleConfig
+    state.py       BattleState, BattleConfig (스킬 포인트 포함)
+    resources.py   스킬 포인트 / 에너지 증감과 상한 처리
     scheduler.py   Action Gauge / Action Value / 사이클
     damage.py      데미지 계산 파이프라인
     targeting.py   대상 지정 규칙
@@ -116,12 +117,39 @@ ACTION_HANDLERS.get("BasicAttackAction")             # 실행
 상태를 복제하면 난수 위치까지 복제되므로, 분기된 미래가 서로 간섭하지 않고 재현 가능하다.
 `CritMode.AVERAGE` 로 분산을 아예 제거한 결정론적 평가도 가능하다.
 
+### 3.6 필살기는 "행동"이지만 "턴"이 아니다
+
+게임 규칙상 필살기는 턴을 소모하지 않고, 자기 턴이 아닐 때도 발동하며, 연쇄된다
+(docs/mechanics.md 4.3). 그래서 일반 행동과 **다른 축**으로 모델링했다.
+
+```python
+engine.legal_actions(state)        # 이번 턴에 할 수 있는 것 (일반 공격 / 전투 스킬)
+engine.available_ultimates(state)  # 지금 발동 가능한 필살기 (턴과 무관)
+engine.use_ultimate(state, action) # 행동 게이지도 turn_count 도 건드리지 않는다
+engine.resolve_ultimates(state, policy)  # 연쇄 발동
+```
+
+`run()` 은 전투 시작 직후 / 턴 시작 시 / 턴 종료 직후에 `resolve_ultimates()` 를 호출한다.
+
+**탐색에 대한 함의**: 한 턴의 행동 공간은 "필살기 0회 이상 + 주 행동 1회"의 조합이다.
+V0.2 는 정책 함수(`ultimate_policy`)로 이 축을 분리해 두었고,
+탐색 단계에서 그 자리에 평가 기반 선택이 들어간다.
+
+### 3.7 일반 공격 / 전투 스킬 / 필살기는 같은 실행 경로를 쓴다
+
+셋의 차이는 전부 `SkillDefinition` 의 데이터(`sp_cost`, `sp_gain`, `energy_gain`,
+`energy_cost`, `target_rule`)로 표현된다. 따라서 `handlers.execute_skill()` 하나가
+세 행동을 모두 처리하고, `ACTION_HANDLERS` 에 세 이름으로 등록되어 있을 뿐이다.
+
+캐릭터별 분기가 코드로 새어 나오지 않게 하는 두 번째 장치다.
+
 ## 4. 탐색을 위한 API (이미 준비된 부분)
 
 ```python
-engine.legal_actions(state)      # 현재 행동자가 할 수 있는 모든 행동
-engine.simulate(state, action)   # 원본을 건드리지 않고 미래 상태 반환
-state.clone()                    # 값 복제
+engine.legal_actions(state)        # 현재 행동자의 주 행동 후보
+engine.available_ultimates(state)  # 지금 발동 가능한 필살기
+engine.simulate(state, action)     # 원본을 건드리지 않고 미래 상태 반환
+state.clone()                      # 값 복제
 ```
 
 V0.1 에는 탐색 알고리즘도 평가 함수도 없다. 그러나 그것들이 필요로 하는

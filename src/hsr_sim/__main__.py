@@ -11,10 +11,10 @@ import argparse
 from . import BattleConfig, BattleEngine, CritMode, build_battle, definitions
 
 
-def make(config: BattleConfig):
+def make(config: BattleConfig, enemies=("test_enemy_a", "test_enemy_b")):
     state = build_battle(
         allies=definitions("test_ally_a", "test_ally_b"),
-        enemies=definitions("test_enemy_a", "test_enemy_b"),
+        enemies=definitions(*enemies),
         config=config,
     )
     engine = BattleEngine(config)
@@ -23,13 +23,24 @@ def make(config: BattleConfig):
 
 
 def demo_battle(config: BattleConfig) -> None:
-    engine, state = make(config)
+    engine, state = make(config, enemies=("test_enemy_c", "test_enemy_c"))
     outcome = engine.run(state)
     print(state.log.render())
     print("-" * 62)
-    print(f"결과: {outcome.value} | 턴 수: {state.turn_count} | 누적 AV: {state.elapsed_av:.2f}")
+    print(
+        f"결과: {outcome.value} | 턴 수: {state.turn_count} | 누적 AV: {state.elapsed_av:.2f}"
+        f" | 스킬 포인트: {state.skill_points}/{state.max_skill_points}"
+    )
     for unit in state.all_units():
-        print(f"  {unit.uid} HP {unit.current_hp:8.1f} / {unit.max_hp:8.1f}  생존={unit.alive}")
+        energy = (
+            f"  에너지 {unit.energy:6.1f} / {unit.max_energy:6.1f}"
+            if unit.max_energy
+            else ""
+        )
+        print(
+            f"  {unit.uid} HP {unit.current_hp:8.1f} / {unit.max_hp:8.1f}"
+            f"  생존={unit.alive}{energy}"
+        )
 
 
 def demo_search(config: BattleConfig) -> None:
@@ -41,7 +52,10 @@ def demo_search(config: BattleConfig) -> None:
     engine, state = make(config)
     engine.start_battle(state)
     uid = engine.advance_to_next_turn(state)
-    print(f"현재 행동자: {uid} (누적 AV {state.elapsed_av:.2f}, 사이클 {state.cycle})\n")
+    print(
+        f"현재 행동자: {uid} (누적 AV {state.elapsed_av:.2f}, 사이클 {state.cycle}, "
+        f"스킬 포인트 {state.skill_points}/{state.max_skill_points})\n"
+    )
 
     actions = engine.legal_actions(state)
     print(f"가능한 행동 {len(actions)}개:")
@@ -52,7 +66,10 @@ def demo_search(config: BattleConfig) -> None:
         dealt = sum(
             u.max_hp - u.current_hp for u in branch.all_units() if u.side.value == "enemy"
         )
-        print(f"  - {action.describe():<40} 적에게 준 누적 피해 {dealt:8.1f}")
+        print(
+            f"  - {action.describe():<32} 누적 피해 {dealt:8.1f}"
+            f"   SP {branch.skill_points}   에너지 {branch.unit(uid).energy:5.1f}"
+        )
 
     print("\n원본 상태는 변경되지 않는다:")
     for unit in state.all_units():
