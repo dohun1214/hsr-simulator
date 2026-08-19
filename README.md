@@ -1,0 +1,138 @@
+# HSR Battle Simulator
+
+붕괴: 스타레일 전투 시뮬레이터.
+
+최종 목표는 현재 전투 상태에서 가능한 행동을 생성하고, 실제 게임 규칙에 따라 미래를
+시뮬레이션·탐색하여 **가장 좋은 행동을 추천하는 것**이다.
+
+현재 버전은 **V0.1 — 기본 전투 시스템**이다.
+
+---
+
+## 빠른 시작
+
+```bash
+# 전투 1회 자동 진행
+PYTHONPATH=src python -m hsr_sim
+
+# 미래 상태 탐색(1수) 데모
+PYTHONPATH=src python -m hsr_sim --mode search --crit never
+
+# 테스트
+python -m pytest          # pytest 가 있을 때
+python run_tests.py       # 의존성 없이 (오프라인 폴백 러너)
+```
+
+Python 3.10 이상. 런타임 의존성 없음.
+
+---
+
+## V0.1 구현 범위
+
+구현됨:
+
+- 캐릭터/적 유닛, 진영, 슬롯
+- HP / ATK / DEF / SPD / 치명타 확률 / 치명타 피해
+- 스탯 수정자 (기본값 x (1 + %합) + 고정합)
+- **Action Gauge 기반 행동 순서** (AV = AG / SPD, 행동 후 AG 10000 복귀)
+- 사이클 (첫 사이클 150 AV, 이후 100 AV)
+- 행동 앞당기기 / 늦추기 / 즉시 행동 (스케줄러 레벨)
+- 턴 진행, 행동 선택, 적 AI
+- 일반 공격
+- **전체 데미지 공식** (Base / 치명타 / 피해 보너스 / 나약 / DEF / RES / 취약 / 피해 감소 / 격파)
+- 속성 약점과 저항 (약점 0%, 기본 20%)
+- 대상 지정 (단일. 확산/전체는 구조만 준비)
+- HP 감소, 사망, 사망 유닛의 행동 제외
+- 전투 종료 판정 (승리 / 패배 / 무승부)
+- 전투 로그
+- 이벤트/트리거 버스
+- 결정론적 난수, 상태 복제, 미래 상태 시뮬레이션 API
+
+**미구현** (구조만 마련):
+
+- 스킬 / 스킬 포인트 / 에너지 / 필살기
+- 버프 / 디버프 / 지속시간 / 중첩
+- 인성치 / 약점 격파 / 격파 피해 / DoT
+- 추가 공격, 캐릭터 패시브 / 행적 / 성혼 / 광추 / 유물
+- 실제 캐릭터·적 데이터 (현재는 검증용 테스트 유닛만)
+- 적 페이즈 / 보스 기믹 / 웨이브
+- 탐색 알고리즘 / 평가 함수 / 행동 추천
+- Web UI
+
+---
+
+## 검증 상태
+
+`python -m pytest` — **59개 테스트 통과**.
+
+주요 수치는 손계산과 대조해 고정했다. 예시 (`--crit never`):
+
+| 상황 | 계산 | 결과 |
+|---|---|---|
+| ATK 1000, 배율 1.0, 적 DEF 1000(Lv80 vs Lv80), 물리 약점, 미격파 | `1000 x 0.5 x 1.0 x 0.9` | **450.0** |
+| 위와 동일하나 비약점 속성 (RES 20%), 적 DEF 800 | `1000 x 5/9 x 0.8 x 0.9` | **400.0** |
+| 적(ATK 700) -> 캐릭터(DEF 500), 인성치 없음 | `700 x 2/3 x 1.0 x 1.0` | **466.7** |
+
+행동 순서도 손계산과 일치한다.
+SPD 100 / 134 / 90 / 110 인 4유닛의 첫 6턴은 `A2 -> E2 -> A1 -> E1 -> A2 -> E2`.
+
+또한 `DEF` 배수는 KQM 의 레벨 기반 식과 Prydwen 의 DEF 기반 식이
+**모든 레벨 조합에서 일치하는지**를 테스트로 검증한다.
+
+---
+
+## 문서
+
+| 문서 | 내용 |
+|---|---|
+| [`docs/mechanics.md`](docs/mechanics.md) | 구현한 게임 규칙의 **근거와 출처**. 확인됨 / 유도됨 / 미확인 표시 |
+| [`docs/architecture.md`](docs/architecture.md) | 구조를 이렇게 잡은 이유, 핵심 설계 결정 |
+| [`docs/roadmap.md`](docs/roadmap.md) | 다음 단계와 **미해결 질문 목록** |
+
+메커니즘 상수나 공식을 바꿀 때는 반드시 `docs/mechanics.md` 를 함께 갱신한다.
+
+---
+
+## 설계 요약
+
+상태 / 정의 / 동작을 분리한다.
+
+- **상태** (`BattleState`, `Unit`) — 순수 데이터만. 함수도 클로저도 이벤트 구독도 없다.
+- **정의** (`UnitDefinition`, `SkillDefinition`) — 불변 데이터. 복제하지 않고 공유한다.
+- **동작** — 전부 레지스트리에 등록된 구현체. 상태를 갖지 않는다.
+
+그래서 `state.clone()` 이 싸고, 결과가 결정론적이며, 미래 상태를 대량으로 탐색할 수 있다.
+
+새 메커니즘 추가는 다음으로 끝난다 (엔진 코어 수정 없음).
+
+```
+새 구현 작성 -> 레지스트리 등록 -> 데이터에 id 추가 -> 테스트 추가
+```
+
+이 성질은 `tests/test_extensibility.py` 에서 실제 코드로 고정되어 있다.
+
+---
+
+## 이름 처리
+
+캐릭터/적/스킬 이름은 `LocalizedName(ko=..., en=..., ko_verified=...)` 로 관리한다.
+영어 데이터를 임의로 번역해서 저장하지 않으며, 공식 한국어 명칭을 확인한 항목만
+`ko_verified=True` 로 표시한다.
+
+현재 들어 있는 유닛은 실제 게임 캐릭터가 아니라 엔진 검증용 가상 유닛이다.
+
+---
+
+## 참고 자료
+
+- [KQM — Speed and Turn Order](https://hsr.keqingmains.com/misc/speed-guide/)
+- [KQM SRL — Complete Damage Formula](https://github.com/KQM-git/SRL/blob/master/docs/combat-mechanics/damage/damage-formula.md)
+- [Fandom Wiki — Speed](https://honkai-star-rail.fandom.com/wiki/Speed) / [Damage](https://honkai-star-rail.fandom.com/wiki/Damage) / [DEF](https://honkai-star-rail.fandom.com/wiki/DEF)
+- [Prydwen — Damage Formula](https://www.prydwen.gg/star-rail/guides/damage-formula)
+
+데이터 소스 후보 (아직 임포트하지 않음):
+[Dimbreath/TurnBasedGameData](https://github.com/DimbreathBot/TurnBasedGameData),
+[StarRailRes](https://github.com/Mar-7th/StarRailRes),
+[HSRMaps](https://github.com/FortOfFans/HSRMaps),
+[HSR-Mapping-DATA](https://github.com/nathacks/HSR-Mapping-DATA),
+[Fribbels HSR Optimizer](https://github.com/fribbels/hsr-optimizer)
