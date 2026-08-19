@@ -194,8 +194,69 @@ HSRMaps 와 2485종을 대조했다. **불일치 2건**.
 
 ---
 
-## 5. 다음 단계 제안
+## 5. 캐릭터 임포터 (구현 완료)
 
-1. `Config/ConfigAI` 를 우리 `EnemyAI` 정의로 변환 (지금은 전부 고정 순환으로 근사)
-2. 캐릭터/광추/유물 임포터 (`AvatarConfig`, `EquipmentConfig`, `RelicConfig`)
-3. 위 배율 문제 해결
+```bash
+python tools/import_characters.py --fetch
+PYTHONPATH=src python -m hsr_sim --mode verify --character 단항 --enemy "얼음 서슬"
+```
+
+결과: `data/characters.json.gz` — 캐릭터 **91명**, 스킬 **688개**, 한국어 명칭 100%.
+
+### 5.1 적과 달리 배율을 신뢰할 수 있다
+
+캐릭터 스킬 설명에는 숫자 자리표시자가 들어 있고 **번호가 `ParamList` 인덱스에 대응**한다.
+
+```
+"Deals Wind DMG equal to #1[i]% of Dan Heng's ATK to one enemy."
+ParamList = [0.5]        ->  배율 50% ATK
+```
+
+즉 설명 자체가 배율의 근거이므로 추정이 아니다.
+공격 스킬 292개 중 **262개(89.7%)** 에서 배율을 추출했다.
+
+추출하지 못한 30개는 실제로 복잡한 경우다.
+
+- 복합 스케일링: "ATK의 #2% 와 최대 HP의 #4% 의 합" (인랑 등)
+- 소환수 스탯 기준 (기억의 길)
+- 협동 공격, 상태 전이형 스킬
+- 설명이 비어 있는 하위 스킬
+
+이들은 `multiplier_verified=False` 로 남는다.
+
+### 5.2 스탯 계산
+
+```
+스탯 = 해당 승급 단계의 Base + Add x (레벨 - 1)
+```
+
+`AvatarPromotionConfig` 에 승급 단계별 Base/Add 가 있다. 검증:
+단항 Lv80 → HP 882.0 / ATK 546.84 / DEF 396.9 / SPD 110, 마치 7 Lv80 → HP 1058.4 / ATK 511.56.
+**게임 내 실제 기본 스탯과 일치한다.**
+
+### 5.3 어그로 교차검증 (중요)
+
+`AvatarPromotionConfig.BaseAggro` 로 docs/mechanics.md 6.1 의 어그로 표가 **게임 데이터로 직접 확인됐다.**
+
+| 내부 직업명 | 운명의 길 | BaseAggro |
+|---|---|---|
+| Knight | 보존 | 150 |
+| Warrior | 파멸 | 125 |
+| Shaman / Warlock / Priest / Memory / Elation | 동조·허무·풍요·기억·환락 | 100 |
+| Rogue / Mage | 수렵·지식 | 75 |
+
+기존에 웹 자료 3곳으로 교차검증했던 값과 **전부 일치**한다.
+`tests/test_character_data.py::test_base_aggro_matches_our_path_table` 가 이를 고정한다.
+
+### 5.4 아직 안 들어온 것
+
+광추, 유물, 행적, 성혼. 따라서 지금 캐릭터 스탯은 **본체 스탯만**이다.
+게임과 비교할 때는 장비를 모두 해제하고 대조해야 한다.
+
+---
+
+## 6. 다음 단계 제안
+
+1. 광추 / 유물 / 행적 / 성혼 임포터
+2. `Config/ConfigAI` 를 우리 `EnemyAI` 정의로 변환 (지금은 전부 고정 순환으로 근사)
+3. 적 스킬 배율 문제 해결 (4장)

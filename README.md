@@ -5,7 +5,7 @@
 최종 목표는 현재 전투 상태에서 가능한 행동을 생성하고, 실제 게임 규칙에 따라 미래를
 시뮬레이션·탐색하여 **가장 좋은 행동을 추천하는 것**이다.
 
-현재 버전은 **V0.6 — 실제 게임 데이터 임포트**다.
+현재 버전은 **V0.7 — 실제 캐릭터 데이터 임포트**다.
 
 ---
 
@@ -116,6 +116,22 @@ PYTHONPATH=src python -m hsr_sim --mode monster --monster 쿠쿠리아
 추정값을 조용히 쓰지 않고 `multiplier_verified=False` 로 표시한다.
 조사 과정은 [`docs/data_sources.md`](docs/data_sources.md) 4장 참고.
 
+### V0.7 — 실제 캐릭터 데이터 임포트
+
+```bash
+python tools/import_characters.py --fetch
+PYTHONPATH=src python -m hsr_sim --mode verify --character 단항 --enemy "얼음 서슬"
+```
+
+- 캐릭터 **91명**, 스킬 **688개** (`data/characters.json.gz`), 한국어 명칭 100%
+- **스킬 배율을 신뢰할 수 있다** — 설명의 `#N[i]%` 가 `ParamList[N-1]` 에 대응
+  (공격 스킬 292개 중 262개 = 89.7% 추출, 나머지는 복합 스케일링 등 실제 예외)
+- 스킬 레벨별 배율, 스킬 포인트 증감, 에너지, 인성치 감소량, 확산 인접 배율
+- 승급 단계 기반 레벨 스케일링 — 단항 Lv80 → ATK 546.84 (게임과 일치)
+- **어그로 표를 게임 데이터로 재검증** — `BaseAggro` 가 기존 값과 전부 일치
+
+**아직 없는 것**: 광추 / 유물 / 행적 / 성혼. 지금 스탯은 캐릭터 본체만이다.
+
 **미구현** (구조만 마련):
 
 - 인성치 / 약점 격파 / 격파 피해
@@ -129,7 +145,7 @@ PYTHONPATH=src python -m hsr_sim --mode monster --monster 쿠쿠리아
 
 ## 검증 상태
 
-`python -m pytest` — **174개 테스트 통과**.
+`python -m pytest` — **191개 테스트 통과**.
 
 주요 수치는 손계산과 대조해 고정했다. 예시 (`--crit never`):
 
