@@ -5,7 +5,7 @@
 최종 목표는 현재 전투 상태에서 가능한 행동을 생성하고, 실제 게임 규칙에 따라 미래를
 시뮬레이션·탐색하여 **가장 좋은 행동을 추천하는 것**이다.
 
-현재 버전은 **V0.7 — 실제 캐릭터 데이터 임포트**다.
+현재 버전은 **V0.8 — 인성치와 약점 격파**다.
 
 ---
 
@@ -144,12 +144,33 @@ PYTHONPATH=src python -m hsr_sim --mode verify --character 카프카 \
 
 **미구현** (구조만 마련):
 
-- 인성치 / 약점 격파 / 격파 피해
 - 추가 공격, 캐릭터 패시브 / 행적 / 성혼 / 광추 / 유물
 - 실제 캐릭터·적 데이터 (현재는 검증용 테스트 유닛만)
 - 적 페이즈 / 보스 기믹 / 웨이브
 - 탐색 알고리즘 / 평가 함수 / 행동 추천
 - Web UI
+
+
+### V0.8 — 인성치와 약점 격파
+
+```bash
+PYTHONPATH=src python -m hsr_sim --mode monster --monster 쿠쿠리아
+```
+
+- **인성치(Toughness)** — 약점 속성 공격만 인성치를 깎는다
+  (게임 데이터 `StanceWeakList` / `StanceBase` / `StanceDamageType` 로 확인)
+- 인성치 0 → **약점 격파**, 이후 받는 피해 배수 0.9 → 1.0, 행동 지연
+- 아케론의 행적처럼 **약점 무시** 공격을 위한 예외 경로 (`ignores_weakness`)
+- 캐릭터 스킬의 인성치 감소량을 실제 데이터에서 임포트 (`toughness_damage`)
+- **격파 피해 기본값 표를 1차 자료에서 확보** — `ExcelOutput/AvatarBreakDamage.json`
+  (Lv1 = 54, Lv60 = 1640.3068, **Lv80 = 3767.5535**, Lv90 = 6020.884)
+- `ToughnessReduced` / `WeaknessBroken` / `ToughnessRecovered` 이벤트
+
+**모르는 것을 추정으로 채우지 않았다.** 격파 피해의 **속성별 배수**와 **최대 인성치 배수**는
+어떤 자료에서도 찾지 못했다. 그래서 이 값들은 `BreakConfig` 에 분리해 두었고,
+**설정하지 않으면 격파 피해는 0** 이다. 행동 지연 비율(0.25)과 인성치 회복 시점도 마찬가지로
+[미확인] 이며 기본값을 쓰되 문서와 Open Questions 에 명시했다.
+근거와 조사 과정은 [`docs/mechanics.md`](docs/mechanics.md) 8장 참고.
 
 ---
 
@@ -170,7 +191,7 @@ PYTHONPATH=src python -m hsr_sim --mode verify --character 카프카 \
 
 ## 검증 상태
 
-`python -m pytest` — **201개 테스트 통과**.
+`python -m pytest` — **217개 테스트 통과**.
 
 주요 수치는 손계산과 대조해 고정했다. 예시 (`--crit never`):
 
