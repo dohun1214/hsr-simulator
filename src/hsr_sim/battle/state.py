@@ -18,6 +18,11 @@ from ..entities.unit import Unit
 from .log import BattleLog
 
 
+#: 전투 시작 시 스킬 포인트. 근거: docs/mechanics.md 3.1
+STARTING_SKILL_POINTS = 3
+MAX_SKILL_POINTS = 5
+
+
 @dataclass
 class BattleConfig:
     """전투 실행 옵션. 상태가 아니라 엔진 설정이다."""
@@ -27,6 +32,8 @@ class BattleConfig:
     log_enabled: bool = True
     #: 무한 루프 방지 (탐색 중 안전장치)
     max_turns: int = 500
+    starting_skill_points: int = STARTING_SKILL_POINTS
+    max_skill_points: int = MAX_SKILL_POINTS
 
 
 @dataclass
@@ -34,6 +41,10 @@ class BattleState:
     units: Dict[str, Unit] = field(default_factory=dict)
     #: 등록 순서. 동점 처리와 재현성의 기준 (docs/mechanics.md 1.7)
     order: List[str] = field(default_factory=list)
+
+    #: 아군 파티 공유 스킬 포인트. 근거: docs/mechanics.md 3.1
+    skill_points: int = 3
+    max_skill_points: int = 5
 
     elapsed_av: float = 0.0
     cycle: int = 1
@@ -81,6 +92,8 @@ class BattleState:
         return BattleState(
             units={uid: unit.clone() for uid, unit in self.units.items()},
             order=list(self.order),
+            skill_points=self.skill_points,
+            max_skill_points=self.max_skill_points,
             elapsed_av=self.elapsed_av,
             cycle=self.cycle,
             turn_count=self.turn_count,

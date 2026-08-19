@@ -36,6 +36,8 @@ def spawn_unit(
         max_toughness=definition.max_toughness,
         current_toughness=definition.max_toughness,
         action_gauge=ACTION_GAUGE_FULL,
+        max_energy=definition.max_energy,
+        energy=0.0,
     )
     unit.current_hp = unit.max_hp
     return unit
@@ -54,7 +56,11 @@ def build_battle(
     (docs/mechanics.md 1.7 의 미확인 규칙에 대한 우리의 결정론적 기본값).
     """
     config = config or BattleConfig()
-    state = BattleState(rng=RngState(seed=config.seed))
+    state = BattleState(
+        rng=RngState(seed=config.seed),
+        skill_points=min(config.starting_skill_points, config.max_skill_points),
+        max_skill_points=config.max_skill_points,
+    )
     state.log.enabled = config.log_enabled
 
     for slot, definition in enumerate(allies):

@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Tuple
 
-from ..core.enums import DamageTag, Element, Path, ScalingStat, Side
+from ..core.enums import DamageTag, Element, Path, ScalingStat, Side, SkillKind
 from ..stats.stat import Stat
 
 
@@ -55,17 +55,37 @@ class SkillDefinition:
     """스킬 1개의 정적 정의.
 
     ``multiplier`` 는 게임 내 표기 배율(예: 100% -> 1.0).
+
+    자원 관련 필드의 근거는 docs/mechanics.md 3~4장.
+    기본값은 게임의 표준값(일반 공격 SP +1 / 에너지 20, 전투 스킬 SP -1 / 에너지 30,
+    필살기 에너지 +5)이지만, 캐릭터마다 다른 경우가 있으므로 전부 데이터로 둔다.
     """
 
     skill_id: str
     name: LocalizedName
     tag: DamageTag
+    kind: SkillKind = SkillKind.BASIC_ATK
     element: Optional[Element] = None
     multiplier: float = 1.0
+    #: 확산(blast)에서 인접 대상에 적용할 배율. None 이면 주 대상과 동일.
+    adjacent_multiplier: Optional[float] = None
     scaling: ScalingStat = ScalingStat.ATK
     flat_bonus: float = 0.0
     target_rule: TargetRule = field(default_factory=TargetRule)
-    #: 향후 확장용: 스킬 포인트 소모/획득, 에너지 획득, 토ughness 감소량 등
+
+    #: 스킬 포인트 (양수 = 획득, 양수 소모는 sp_cost 로 표현)
+    sp_gain: int = 0
+    sp_cost: int = 0
+
+    #: 사용 시 시전자가 얻는 에너지 (ERR 적용 전)
+    energy_gain: float = 0.0
+    #: 필살기 사용에 필요한 에너지. 0 이면 자원 요구 없음
+    energy_cost: float = 0.0
+    #: 이 공격에 맞은 대상이 얻는 에너지 (ERR 적용 전).
+    #: 자료가 "적에 따라 다르다"고만 하므로 데이터로 둔다. docs/mechanics.md 4.4
+    energy_grant_to_target: float = 0.0
+
+    #: 아직 이름이 없는 미래 메커니즘용 확장 슬롯
     extra: Dict[str, float] = field(default_factory=dict)
 
 
@@ -85,8 +105,12 @@ class UnitDefinition:
     path: Optional[Path] = None
     base_stats: Dict[Stat, float] = field(default_factory=dict)
     skills: Dict[str, SkillDefinition] = field(default_factory=dict)
-    #: 기본 공격으로 사용할 스킬 id
+    #: 각 슬롯에 대응하는 스킬 id (없으면 None)
     basic_attack_id: str = "basic"
+    skill_id: Optional[str] = None
+    ultimate_id: Optional[str] = None
+    #: 필살기 최대 에너지. 0 이면 에너지 시스템을 쓰지 않는 개체(대부분의 적)
+    max_energy: float = 0.0
     #: 적일 때: 약점 속성
     weaknesses: Tuple[Element, ...] = ()
     #: 속성 저항 명시 오버라이드 (미지정 속성은 기본 규칙 적용)

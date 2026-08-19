@@ -65,6 +65,33 @@ class AfterAction(Event):
     action: Any = None
 
 
+# --- 자원 -----------------------------------------------------------------
+
+
+@dataclass
+class SkillPointChanged(Event):
+    before: int = 0
+    after: int = 0
+    delta: int = 0
+
+
+@dataclass
+class EnergyChanged(Event):
+    uid: str = ""
+    before: float = 0.0
+    after: float = 0.0
+
+
+@dataclass
+class BeforeUltimate(Event):
+    uid: str = ""
+
+
+@dataclass
+class AfterUltimate(Event):
+    uid: str = ""
+
+
 # --- 데미지 / HP -----------------------------------------------------------
 
 

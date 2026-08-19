@@ -40,6 +40,10 @@ class Unit:
     action_gauge: float = ACTION_GAUGE_FULL
     alive: bool = True
 
+    #: 필살기 에너지. max_energy 가 0 이면 에너지 시스템을 쓰지 않는 개체.
+    energy: float = 0.0
+    max_energy: float = 0.0
+
     #: V0.1 에서는 격파 시스템을 구현하지 않지만, 데미지 공식의
     #: Broken Multiplier(0.9 / 1.0) 를 실제 게임과 맞추기 위해 플래그만 둔다.
     #: 근거: docs/mechanics.md 2.8
@@ -66,6 +70,10 @@ class Unit:
     @property
     def spd(self) -> float:
         return max(self.stat(Stat.SPD), 1e-9)
+
+    @property
+    def energy_full(self) -> bool:
+        return self.max_energy > 0.0 and self.energy >= self.max_energy
 
     @property
     def hp_ratio(self) -> float:
@@ -106,6 +114,8 @@ class Unit:
             current_hp=self.current_hp,
             action_gauge=self.action_gauge,
             alive=self.alive,
+            energy=self.energy,
+            max_energy=self.max_energy,
             toughness_broken=self.toughness_broken,
             current_toughness=self.current_toughness,
             max_toughness=self.max_toughness,

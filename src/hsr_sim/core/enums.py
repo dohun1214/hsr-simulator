@@ -84,6 +84,19 @@ class DamageTag(Enum):
     ADDITIONAL = "additional"
 
 
+class SkillKind(Enum):
+    """행동 슬롯 분류.
+
+    자원 소모/획득 규칙이 이 값에 따라 달라진다 (docs/mechanics.md 3~4장).
+    """
+
+    BASIC_ATK = "basic_atk"
+    SKILL = "skill"
+    ULTIMATE = "ultimate"
+    TALENT = "talent"
+    TECHNIQUE = "technique"
+
+
 class ScalingStat(Enum):
     """스킬 배율이 곱해지는 기준 스탯."""
 
