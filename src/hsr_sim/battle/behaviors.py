@@ -9,7 +9,8 @@ from __future__ import annotations
 from typing import Optional
 
 from ..entities.definitions import TargetRule
-from ..registries import BEHAVIORS
+from ..registries import BEHAVIORS, UNIT_DEFINITIONS
+from . import aggro
 from .actions import Action, BasicAttackAction, SkipAction
 from .targeting import candidate_targets
 
@@ -18,15 +19,38 @@ def _basic_attack_rule() -> TargetRule:
     return TargetRule(side="enemy", shape="single")
 
 
-def basic_attack_random(engine, state, unit) -> Action:
-    """살아 있는 적 중 무작위 1명에게 일반 공격.
+def _skill_rule(unit, skill_id: str) -> TargetRule:
+    definition = UNIT_DEFINITIONS.try_get(unit.definition_id)
+    if definition is None:
+        return _basic_attack_rule()
+    skill = definition.skills.get(skill_id)
+    return skill.target_rule if skill is not None else _basic_attack_rule()
 
-    난수는 BattleState 의 RNG 를 사용하므로 시드가 같으면 완전히 재현된다.
+
+def basic_attack_aggro(engine, state, unit) -> Action:
+    """스킬의 대상 규칙에 따라 주 대상을 고르고 일반 공격.
+
+    적이 아군을 고를 때의 **기본 동작**이다. 완전 무작위가 아니라
+    운명의 길에서 오는 어그로에 비례한 확률로 고른다 (docs/mechanics.md 6장).
+    난수는 BattleState 의 RNG 를 쓰므로 시드가 같으면 완전히 재현된다.
+    """
+    rule = _skill_rule(unit, "basic")
+    targets = candidate_targets(state, unit, rule)
+    target = aggro.select_target(state, targets, rule.selection)
+    if target is None:
+        return SkipAction(actor_uid=unit.uid, reason="대상 없음")
+    return BasicAttackAction(actor_uid=unit.uid, target_uid=target.uid)
+
+
+def basic_attack_random(engine, state, unit) -> Action:
+    """살아 있는 적 중 **균등 확률**로 1명에게 일반 공격.
+
+    어그로를 무시하는 Bounce 계열 공격이나 테스트용.
     """
     targets = candidate_targets(state, unit, _basic_attack_rule())
-    if not targets:
+    target = aggro.select_target(state, targets, "uniform")
+    if target is None:
         return SkipAction(actor_uid=unit.uid, reason="대상 없음")
-    target = targets[state.rng.randrange(len(targets))]
     return BasicAttackAction(actor_uid=unit.uid, target_uid=target.uid)
 
 
@@ -48,6 +72,7 @@ def basic_attack_lowest_hp(engine, state, unit) -> Action:
     return BasicAttackAction(actor_uid=unit.uid, target_uid=target.uid)
 
 
+BEHAVIORS.register("basic_attack_aggro", basic_attack_aggro)
 BEHAVIORS.register("basic_attack_random", basic_attack_random)
 BEHAVIORS.register("basic_attack_first", basic_attack_first)
 BEHAVIORS.register("basic_attack_lowest_hp", basic_attack_lowest_hp)

@@ -261,7 +261,7 @@ class BattleEngine:
         """유닛의 등록된 행동 선택기로 행동을 고른다 (적 AI / 자동 진행)."""
         unit = state.unit(uid)
         definition = UNIT_DEFINITIONS.try_get(unit.definition_id)
-        behavior_id = definition.behavior_id if definition else "basic_attack_random"
+        behavior_id = definition.behavior_id if definition else "basic_attack_aggro"
         behavior = BEHAVIORS.get(behavior_id)
         return behavior(self, state, unit)
 

@@ -183,7 +183,7 @@ TEST_ENEMY_A = UnitDefinition(
     skills={"basic": basic_skill(1.0, energy_to_target=10.0)},
     weaknesses=(Element.PHYSICAL,),
     max_toughness=60.0,
-    behavior_id="basic_attack_random",
+    behavior_id="basic_attack_aggro",
 )
 
 TEST_ENEMY_B = UnitDefinition(
@@ -202,7 +202,7 @@ TEST_ENEMY_B = UnitDefinition(
     skills={"basic": basic_skill(0.9, energy_to_target=10.0)},
     weaknesses=(Element.FIRE,),
     max_toughness=30.0,
-    behavior_id="basic_attack_random",
+    behavior_id="basic_attack_aggro",
 )
 
 TEST_ENEMY_C = UnitDefinition(
@@ -221,7 +221,7 @@ TEST_ENEMY_C = UnitDefinition(
     skills={"basic": basic_skill(0.9, energy_to_target=10.0)},
     weaknesses=(Element.FIRE,),
     max_toughness=30.0,
-    behavior_id="basic_attack_random",
+    behavior_id="basic_attack_aggro",
 )
 
 

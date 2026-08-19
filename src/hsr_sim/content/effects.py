@@ -81,6 +81,28 @@ TEST_BURN = StatusEffectDefinition(
     dot=DotSpec(element=Element.FIRE, multiplier=0.5, scaling=ScalingStat.ATK, per_stack=True),
 )
 
+#: 도발: 자신의 어그로를 크게 올린다.
+#: 어그로가 일반 스탯이므로 상태 효과 시스템이 그대로 재사용된다 (docs/mechanics.md 6.3).
+TEST_TAUNT = StatusEffectDefinition(
+    effect_id="test_taunt",
+    name=_name("테스트 도발", "Test Taunt"),
+    category=EffectCategory.BUFF,
+    base_duration=2,
+    stat_modifiers=(
+        StatModifier(Stat.AGGRO, ModifierKind.PERCENT_OF_BASE, 5.0, "test_taunt"),
+    ),
+)
+
+TEST_AGGRO_DOWN = StatusEffectDefinition(
+    effect_id="test_aggro_down",
+    name=_name("테스트 어그로 감소", "Test Aggro Down"),
+    category=EffectCategory.BUFF,
+    base_duration=2,
+    stat_modifiers=(
+        StatModifier(Stat.AGGRO, ModifierKind.PERCENT_OF_BASE, -0.5, "test_aggro_down"),
+    ),
+)
+
 TEST_POISON = StatusEffectDefinition(
     effect_id="test_poison",
     name=_name("테스트 중독", "Test Poison"),
@@ -120,6 +142,8 @@ for _definition in (
     TEST_STUN,
     TEST_BURN,
     TEST_POISON,
+    TEST_TAUNT,
+    TEST_AGGRO_DOWN,
     TEST_UNREMOVABLE_MARK,
     TEST_TURN_START_BUFF,
 ):
