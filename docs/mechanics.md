@@ -185,7 +185,112 @@ V0.1 은 Toughness 시스템 자체(약점 격파, 감소량, 회복)를 구현�
 
 ---
 
-## 3. 참고 자료
+## 3. 스킬 포인트 (Skill Point)
+
+조사일: 2026-08-19
+
+### 3.1 기본 규칙 **[확인됨]**
+
+> "You start each battle with 3 Skill Points"
+> "You can hold up to 5 Skill Points, and Skill Points are shared across all characters within the team."
+> "Basic ATKs generate one Skill Point, while most Skills consume one Skill Point."
+> — KQM Beginner Guide
+
+> "You can hold up to a maximum of 5 Skill Points and they are shared between the whole team."
+> "You cannot activate a Skill ability if you do not have any Skill Points."
+> — Prydwen, Introduction to the Game
+
+정리:
+
+```
+시작       3
+최대       5   (파티 공유. 일부 캐릭터가 상한을 올리는 경우가 있어 가변 필드로 둔다)
+일반 공격  +1
+전투 스킬  -1  (대부분. 캐릭터별로 다를 수 있어 스킬 데이터에 둔다)
+상한 초과분은 버려진다
+```
+
+- 스킬 포인트는 **아군 파티의 공유 자원**이다. 적은 사용하지 않는다.
+- 포인트가 없으면 전투 스킬을 선택할 수 없다 → `legal_actions()` 에서 걸러야 한다.
+
+### 3.2 미확인
+
+- 상한 초과 시 버려지는 것이 맞는지 명시적 서술은 못 찾았다. 일반적인 이해대로 버린다. **[유도됨]**
+
+---
+
+## 4. 에너지와 필살기
+
+### 4.1 에너지 획득량 **[확인됨]**
+
+> Basic Attack: "Generates 20 Energy"
+> Skill ability: "Generates 30 Energy"
+> Ultimate ability: "Generates 5 Energy"
+> Defeating enemies: "Generates 10 Energy/enemy"
+> Getting hit: "Energy gained will vary depending on the enemy"
+> — Prydwen, Introduction to the Game
+
+### 4.2 에너지 회복 효율 (ERR) **[확인됨]**
+
+> "The amount of Energy gained from each of the actions listed above can be increased by
+> increasing the Character's Energy Regeneration Rate stat."
+> — Prydwen
+
+> "Note that some Energy-generating effects are not affected by Energy Regeneration Rate."
+> — Fandom Wiki, Energy Regeneration Rate
+
+> 위 4가지 행동 기반 획득에 대해 "increased based on the character's Energy Regeneration Rate"
+> — KQM Beginner Guide
+
+즉 **행동으로 얻는 에너지에는 ERR 이 곱해지고, 특성/광추의 "에너지 N 회복" 같은
+고정 회복에는 곱해지지 않는다.**
+
+구현: 에너지 지급 함수에 `apply_err: bool` 인자를 두고, 행동 기반은 True, 고정 회복은 False.
+
+```
+실제 획득량 = 기본 획득량 x (1 + ERR 보너스)
+```
+
+우리 구현에서 `Stat.ENERGY_REGEN_RATE` 는 게임 표기 100% 를 **0.0(=+0%)** 으로 잡는다.
+즉 배수는 `1 + stat` 이다. (치명타 확률 등 다른 가산 스탯과 표현을 통일하기 위함)
+
+### 4.3 필살기 사용 규칙 **[확인됨]**
+
+> "Using an Ultimate ability during the Character's turn does not end that Character's turn."
+> "Ultimate abilities can also be used when it is not currently the Character's turn ...
+> the Character will immediately activate their Ultimate ability after the current turn ends.
+> This allows you to interrupt the normal turn order flow."
+> "Multiple Ultimates can also be chained in this way."
+> — Prydwen
+
+> "Ultimates can be cast at any time; they immediately interrupt the action queue after the
+> current attack is completed."
+> — KQM Beginner Guide
+
+정리 (구현에 중요):
+
+- 필살기는 **턴을 소모하지 않는다.** 행동 게이지를 되돌리지 않고, AV 도 흐르지 않는다.
+- 자기 턴 중에 써도 그 턴은 유지된다 (필살기 후 일반 공격/스킬을 그대로 할 수 있다).
+- 자기 턴이 아닐 때 쓰면 **현재 턴이 끝난 직후**에 발동한다.
+- 여러 필살기를 연달아 발동할 수 있다.
+
+> "Most Ultimates can only be used once Energy reaches max"
+> — Fandom Wiki, Energy
+
+### 4.4 미확인 **[미확인]**
+
+| 항목 | 현재 처리 |
+|---|---|
+| 피격 시 얻는 에너지의 정확한 값 | 자료가 "적에 따라 다르다"고만 함. 스킬 데이터의 `energy_grant_to_target` 필드로 두고 기본 10 |
+| 필살기의 +5 가 소모 이후에 지급되는지, ERR 이 곱해지는지 | 소모 후 지급, ERR 적용으로 구현 |
+| 처치 시 +10 을 누가 받는지 (막타 캐릭터인지 전원인지) | 막타를 넣은 캐릭터가 받도록 구현 |
+| 에너지 상한 초과분 처리 | 버린다 (일부 캐릭터의 초과 저장은 예외 메커니즘으로 취급) |
+
+이 항목들은 실측으로 확정되면 `docs/roadmap.md` 의 Open Questions 에서 제거한다.
+
+---
+
+## 5. 참고 자료
 
 - KQM — How Do Speed and Turn Order Work in Honkai: Star Rail? <https://hsr.keqingmains.com/misc/speed-guide/>
 - KQM SRL — Complete Damage Formula <https://github.com/KQM-git/SRL/blob/master/docs/combat-mechanics/damage/damage-formula.md>
@@ -193,3 +298,7 @@ V0.1 은 Toughness 시스템 자체(약점 격파, 감소량, 회복)를 구현�
 - Fandom Wiki — Damage <https://honkai-star-rail.fandom.com/wiki/Damage>
 - Fandom Wiki — DEF <https://honkai-star-rail.fandom.com/wiki/DEF>
 - Prydwen — Damage Formula <https://www.prydwen.gg/star-rail/guides/damage-formula>
+- Prydwen — Introduction to the Game <https://www.prydwen.gg/star-rail/guides/introduction-to-the-game>
+- KQM — Beginner Guide <https://hsr.keqingmains.com/misc/beginner-guide/>
+- Fandom Wiki — Energy <https://honkai-star-rail.fandom.com/wiki/Energy>
+- Fandom Wiki — Energy Regeneration Rate <https://honkai-star-rail.fandom.com/wiki/Energy_Regeneration_Rate>
