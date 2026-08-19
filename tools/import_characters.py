@@ -27,9 +27,17 @@ import subprocess
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 REPO = "https://github.com/DimbreathBot/TurnBasedGameData.git"
+#: 주요 행적(특성)의 이름/설명은 원본에서 문자열 키로만 참조되어 TextMap 으로 풀 수 없다.
+#: StarRailRes 가 이미 한국어로 정리해 두었으므로 보조 소스로 쓴다 (요구사항 8).
+SRRES_REPO = "https://github.com/Mar-7th/StarRailRes.git"
+SRRES_FILES = [
+    "index_min/kr/character_skill_trees.json",
+    "index_min/en/character_skill_trees.json",
+]
 
 NEEDED_FILES = [
     "ExcelOutput/AvatarConfig.json",
+    "ExcelOutput/AvatarSkillTreeConfig.json",
     "ExcelOutput/AvatarPromotionConfig.json",
     "ExcelOutput/AvatarSkillConfig.json",
     "TextMap/TextMapEN.json",
@@ -54,6 +62,32 @@ PATHS = {
     "Priest": "abundance",      # 풍요   100
     "Memory": "remembrance",    # 기억   100
     "Elation": "elation",       # 환락   100
+}
+
+#: 행적 노드 종류 (PointType)
+TRACE_TYPES = {1: "stat", 2: "skill_level", 3: "major"}
+
+#: 게임 내부 스탯 속성명 -> 우리 표현
+#: 접미사 AddedRatio 는 비율, Base/Delta 는 가산이다.
+TRACE_PROPERTIES = {
+    "AttackAddedRatio": ("atk", "percent"),
+    "HPAddedRatio": ("max_hp", "percent"),
+    "DefenceAddedRatio": ("def", "percent"),
+    "CriticalChanceBase": ("crit_rate", "flat"),
+    "CriticalDamageBase": ("crit_dmg", "flat"),
+    "SpeedDelta": ("spd", "flat"),
+    "StatusResistanceBase": ("effect_res", "flat"),
+    "StatusProbabilityBase": ("effect_hit_rate", "flat"),
+    "BreakDamageAddedRatioBase": ("break_effect", "flat"),
+    "SPRatioBase": ("energy_regen_rate", "flat"),
+    "HealRatioBase": ("outgoing_healing", "flat"),
+    "PhysicalAddedRatio": ("dmg_physical", "flat"),
+    "FireAddedRatio": ("dmg_fire", "flat"),
+    "IceAddedRatio": ("dmg_ice", "flat"),
+    "ThunderAddedRatio": ("dmg_lightning", "flat"),
+    "WindAddedRatio": ("dmg_wind", "flat"),
+    "QuantumAddedRatio": ("dmg_quantum", "flat"),
+    "ImaginaryAddedRatio": ("dmg_imaginary", "flat"),
 }
 
 #: AttackType -> 스킬 슬롯
@@ -127,6 +161,40 @@ def fetch(cache: str) -> str:
     )
     subprocess.run(["git", "-C", cache, "checkout", "HEAD"], check=True)
     return cache
+
+
+def fetch_starrailres(cache: str) -> str:
+    if not os.path.isdir(os.path.join(cache, ".git")):
+        os.makedirs(cache, exist_ok=True)
+        subprocess.run(
+            ["git", "clone", "--depth", "1", "--filter=blob:none", "--no-checkout",
+             SRRES_REPO, cache],
+            check=True,
+        )
+    subprocess.run(["git", "-C", cache, "sparse-checkout", "init", "--no-cone"], check=True)
+    subprocess.run(
+        ["git", "-C", cache, "sparse-checkout", "set", "--no-cone",
+         *[f"/{f}" for f in SRRES_FILES]],
+        check=True,
+    )
+    subprocess.run(["git", "-C", cache, "checkout", "HEAD"], check=True)
+    return cache
+
+
+def load_starrailres(path: Optional[str]) -> Dict[str, Dict[str, Any]]:
+    """StarRailRes 의 한국어/영어 행적 텍스트를 point_id 기준으로 모은다."""
+    if not path:
+        return {}
+    merged: Dict[str, Dict[str, Any]] = {}
+    for lang in ("kr", "en"):
+        file = os.path.join(path, f"index_min/{lang}/character_skill_trees.json")
+        if not os.path.exists(file):
+            continue
+        with open(file, encoding="utf-8") as fp:
+            for key, node in json.load(fp).items():
+                entry = merged.setdefault(key, {})
+                entry[lang] = {"name": node.get("name") or None, "desc": node.get("desc") or None}
+    return merged
 
 
 def load(source: str, name: str) -> Any:
@@ -203,7 +271,58 @@ def convert_skills(rows: List[dict], en: TextMap, ko: TextMap) -> Dict[str, dict
     return skills
 
 
-def convert_character(raw: dict, promotions: List[dict], en: TextMap, ko: TextMap) -> dict:
+#: 피해 계산에 개입할 수 있는 특성인지 판별하는 한국어 키워드
+DAMAGE_KEYWORDS = re.compile(r"피해|치명타|약점\s*격파|추가\s*공격|방어력|저항\s*관통")
+
+
+def convert_traces(rows: List[dict], en: TextMap, ko: TextMap,
+                   srres: Dict[str, Dict[str, Any]]) -> List[dict]:
+    """행적 노드. 스탯 보너스 노드와 특성(주요 행적)을 모두 담는다."""
+    traces = []
+    for row in rows:
+        bonuses = []
+        for entry in row.get("StatusAddList") or []:
+            mapped = TRACE_PROPERTIES.get(entry.get("PropertyType"))
+            bonuses.append(
+                {
+                    "property": entry.get("PropertyType"),
+                    "stat": mapped[0] if mapped else None,
+                    "kind": mapped[1] if mapped else None,
+                    "value": value(entry.get("Value")),
+                }
+            )
+        # 주요 행적의 이름/설명은 StarRailRes 에서 보충한다
+        external = srres.get(str(row.get("PointID")), {})
+        ko_text = external.get("kr") or {}
+        en_text = external.get("en") or {}
+        desc_ko = strip_tags(ko_text.get("desc"))
+        desc_en = strip_tags(en_text.get("desc")) or strip_tags(en.get(row.get("PointDesc")))
+        traces.append(
+            {
+                "point_id": row.get("PointID"),
+                "type": TRACE_TYPES.get(row.get("PointType")),
+                "level": row.get("Level"),
+                "max_level": row.get("MaxLevel"),
+                "name": {"ko": ko_text.get("name"), "en": en_text.get("name")},
+                "desc": {"ko": ko_text.get("desc"), "en": en_text.get("desc")},
+                "stat_bonuses": bonuses,
+                "level_up_skill_ids": list(row.get("LevelUpSkillID") or []),
+                "params": [value(p) for p in row.get("ParamList") or []],
+                # 피해 계산에 개입할 수 있는 특성인가 (검증 시 방해 요소)
+                "affects_damage": bool(
+                    row.get("PointType") == 3
+                    and (
+                        DAMAGE_KEYWORDS.search(desc_ko or "")
+                        or re.search(r"\bDMG\b|damage|CRIT|Weakness Break", desc_en or "", re.I)
+                    )
+                ),
+            }
+        )
+    return traces
+
+
+def convert_character(raw: dict, promotions: List[dict], traces: List[dict],
+                      en: TextMap, ko: TextMap) -> dict:
     promotions = sorted(promotions, key=lambda r: r.get("MaxLevel") or 0)
     rarity = raw.get("Rarity") or ""
     name_ko = ko.get(raw.get("AvatarName"))
@@ -236,10 +355,24 @@ def convert_character(raw: dict, promotions: List[dict], en: TextMap, ko: TextMa
             for row in promotions
         ],
         "skill_ids": list(raw.get("SkillList") or []),
+        "traces": traces,
+        # 모든 스탯 행적을 찍었을 때의 합계
+        "trace_stat_totals": _sum_trace_stats(traces),
     }
 
 
-def run_import(source: str) -> dict:
+def _sum_trace_stats(traces: List[dict]) -> Dict[str, Dict[str, float]]:
+    totals: Dict[str, Dict[str, float]] = {}
+    for trace in traces:
+        for bonus in trace["stat_bonuses"]:
+            if not bonus["stat"]:
+                continue
+            slot = totals.setdefault(bonus["stat"], {"percent": 0.0, "flat": 0.0})
+            slot[bonus["kind"]] += bonus["value"]
+    return totals
+
+
+def run_import(source: str, srres_path: Optional[str] = None) -> dict:
     en = TextMap([os.path.join(source, "TextMap/TextMapEN.json")])
     ko = TextMap(
         [
@@ -248,13 +381,24 @@ def run_import(source: str) -> dict:
         ]
     )
     avatars = load(source, "ExcelOutput/AvatarConfig.json")
+    trace_rows: Dict[int, List[dict]] = {}
+    for row in load(source, "ExcelOutput/AvatarSkillTreeConfig.json"):
+        trace_rows.setdefault(row["AvatarID"], []).append(row)
     promotion_rows: Dict[int, List[dict]] = {}
     for row in load(source, "ExcelOutput/AvatarPromotionConfig.json"):
         promotion_rows.setdefault(row["AvatarID"], []).append(row)
 
+    srres = load_starrailres(srres_path)
     skills = convert_skills(load(source, "ExcelOutput/AvatarSkillConfig.json"), en, ko)
     characters = [
-        convert_character(raw, promotion_rows.get(raw["AvatarID"], []), en, ko) for raw in avatars
+        convert_character(
+            raw,
+            promotion_rows.get(raw["AvatarID"], []),
+            convert_traces(trace_rows.get(raw["AvatarID"], []), en, ko, srres),
+            en,
+            ko,
+        )
+        for raw in avatars
     ]
 
     commit = subprocess.run(
@@ -282,13 +426,16 @@ def main() -> int:
     parser.add_argument("--fetch", action="store_true")
     parser.add_argument("--cache", default=os.path.expanduser("~/.cache/hsr-gamedata"))
     parser.add_argument("--out", default="data/characters.json.gz")
+    parser.add_argument("--starrailres", help="StarRailRes 저장소 경로 (주요 행적 한국어 텍스트)")
+    parser.add_argument("--srres-cache", default=os.path.expanduser("~/.cache/hsr-starrailres"))
     args = parser.parse_args()
 
     source = fetch(args.cache) if args.fetch else args.source
+    srres_path = args.starrailres or (fetch_starrailres(args.srres_cache) if args.fetch else None)
     if not source:
         parser.error("--source 또는 --fetch 중 하나가 필요합니다")
 
-    result = run_import(source)
+    result = run_import(source, srres_path)
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     opener = gzip.open if args.out.endswith(".gz") else open
     with opener(args.out, "wt", encoding="utf-8") as fp:
@@ -302,6 +449,11 @@ def main() -> int:
     print(f"캐릭터 {len(characters)}명, 스킬 {len(skills)}개 -> {args.out} ({size:.1f} MB)")
     print(f"한국어 공식 명칭: {ko_ok}/{len(characters)}")
     print(f"공격 스킬 배율 추출: {len(verified)}/{len(attacks)} ({len(verified)/max(1,len(attacks)):.1%})")
+    traces = sum(len(c["traces"]) for c in characters)
+    major = sum(1 for c in characters for t in c["traces"] if t["type"] == "major")
+    named = sum(1 for c in characters for t in c["traces"] if t["type"] == "major" and t["name"]["ko"])
+    damaging = sum(1 for c in characters for t in c["traces"] if t["affects_damage"])
+    print(f"행적 노드 {traces}개 (특성 {major}개, 한국어 이름 확보 {named}개, 피해 관련 {damaging}개)")
     return 0
 
 
