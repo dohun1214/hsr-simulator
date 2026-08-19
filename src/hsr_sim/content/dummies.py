@@ -1,0 +1,106 @@
+"""V0.1 검증용 테스트 유닛.
+
+주의: 여기 있는 유닛은 **실제 게임 캐릭터/적이 아니다.**
+전투 엔진 자체를 검증하기 위한 가상의 개체이며, 이름도 우리가 지은 것이다.
+
+실제 캐릭터/적 데이터는 별도 임포터로 들어올 예정이며,
+그때는 반드시 공식 한국어 명칭을 확인해서 `LocalizedName.ko_verified=True` 로 표시한다.
+(요구사항 6)
+"""
+
+from __future__ import annotations
+
+from ..core.enums import DamageTag, Element, Path, ScalingStat, Side
+from ..entities.definitions import LocalizedName, SkillDefinition, TargetRule, UnitDefinition
+from ..registries import UNIT_DEFINITIONS
+from ..stats.stat import Stat
+
+
+def _basic(skill_id: str, name_ko: str, name_en: str, multiplier: float) -> SkillDefinition:
+    return SkillDefinition(
+        skill_id=skill_id,
+        name=LocalizedName(ko=name_ko, en=name_en, ko_verified=True),
+        tag=DamageTag.BASIC_ATK,
+        multiplier=multiplier,
+        scaling=ScalingStat.ATK,
+        target_rule=TargetRule(side="enemy", shape="single"),
+    )
+
+
+TEST_ALLY_A = UnitDefinition(
+    unit_id="test_ally_a",
+    name=LocalizedName(ko="테스트 아군 A", en="Test Ally A", ko_verified=True),
+    default_side=Side.ALLY,
+    element=Element.PHYSICAL,
+    path=Path.DESTRUCTION,
+    base_stats={
+        Stat.MAX_HP: 1200.0,
+        Stat.ATK: 1000.0,
+        Stat.DEF: 500.0,
+        Stat.SPD: 100.0,
+        Stat.CRIT_RATE: 0.5,
+        Stat.CRIT_DMG: 1.0,
+    },
+    skills={"basic": _basic("basic", "테스트 일반 공격", "Test Basic Attack", 1.0)},
+    behavior_id="basic_attack_first",
+)
+
+TEST_ALLY_B = UnitDefinition(
+    unit_id="test_ally_b",
+    name=LocalizedName(ko="테스트 아군 B", en="Test Ally B", ko_verified=True),
+    default_side=Side.ALLY,
+    element=Element.FIRE,
+    path=Path.HUNT,
+    base_stats={
+        Stat.MAX_HP: 1000.0,
+        Stat.ATK: 900.0,
+        Stat.DEF: 400.0,
+        Stat.SPD: 134.0,
+        Stat.CRIT_RATE: 0.5,
+        Stat.CRIT_DMG: 1.0,
+    },
+    skills={"basic": _basic("basic", "테스트 일반 공격", "Test Basic Attack", 1.1)},
+    behavior_id="basic_attack_lowest_hp",
+)
+
+TEST_ENEMY_A = UnitDefinition(
+    unit_id="test_enemy_a",
+    name=LocalizedName(ko="테스트 적 A", en="Test Enemy A", ko_verified=True),
+    default_side=Side.ENEMY,
+    element=Element.PHYSICAL,
+    base_stats={
+        Stat.MAX_HP: 8000.0,
+        Stat.ATK: 700.0,
+        Stat.DEF: 1000.0,
+        Stat.SPD: 90.0,
+        Stat.CRIT_RATE: 0.0,
+        Stat.CRIT_DMG: 0.5,
+    },
+    skills={"basic": _basic("basic", "테스트 적 공격", "Test Enemy Attack", 1.0)},
+    weaknesses=(Element.PHYSICAL,),
+    max_toughness=60.0,
+    behavior_id="basic_attack_random",
+)
+
+TEST_ENEMY_B = UnitDefinition(
+    unit_id="test_enemy_b",
+    name=LocalizedName(ko="테스트 적 B", en="Test Enemy B", ko_verified=True),
+    default_side=Side.ENEMY,
+    element=Element.ICE,
+    base_stats={
+        Stat.MAX_HP: 5000.0,
+        Stat.ATK: 600.0,
+        Stat.DEF: 800.0,
+        Stat.SPD: 110.0,
+        Stat.CRIT_RATE: 0.0,
+        Stat.CRIT_DMG: 0.5,
+    },
+    skills={"basic": _basic("basic", "테스트 적 공격", "Test Enemy Attack", 0.9)},
+    weaknesses=(Element.FIRE,),
+    max_toughness=30.0,
+    behavior_id="basic_attack_random",
+)
+
+
+for _definition in (TEST_ALLY_A, TEST_ALLY_B, TEST_ENEMY_A, TEST_ENEMY_B):
+    UNIT_DEFINITIONS.register(_definition.unit_id, _definition)
