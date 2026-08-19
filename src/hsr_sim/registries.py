@@ -27,6 +27,9 @@ ABILITIES: Registry[Any] = Registry("특성")
 #: effect_id -> StatusEffectDefinition
 STATUS_EFFECTS: Registry[Any] = Registry("상태 효과")
 
+#: ai_id -> EnemyAI (적의 행동 패턴 정의)
+ENEMY_AI: Registry[Any] = Registry("적 AI")
+
 #: behavior_id -> Behavior (적 AI, 자동 행동 선택기)
 BEHAVIORS: Registry[Any] = Registry("행동 선택기")
 
