@@ -14,6 +14,7 @@ from ..core.enums import Side, SkillKind
 from ..registries import ACTION_HANDLERS, UNIT_DEFINITIONS
 from .actions import BasicAttackAction, SkillAction, SkipAction, UltimateAction
 from .damage import DamageContext
+from . import status
 from .resources import change_skill_points, gain_energy, spend_energy
 from .targeting import resolve_hit_targets
 
@@ -74,10 +75,17 @@ def execute_skill(engine, state, action) -> None:
             skill_id=skill.skill_id,
         )
         engine.deal_damage(state, ctx)
+        for effect_id, base_chance in skill.inflicts:
+            status.try_apply_effect(
+                engine, state, target, effect_id, source=actor, base_chance=base_chance
+            )
         if skill.energy_grant_to_target:
             gain_energy(
                 engine, state, target, skill.energy_grant_to_target, reason="피격"
             )
+
+    for effect_id in skill.self_effects:
+        status.apply_effect(engine, state, actor, effect_id, source=actor)
 
     # --- 자원 획득 -------------------------------------------------------
     if skill.sp_gain and actor.side is Side.ALLY:

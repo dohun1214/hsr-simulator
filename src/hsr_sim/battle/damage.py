@@ -82,6 +82,17 @@ class DamageContext:
     #: 아직 이름이 없는 미래 메커니즘용 곱연산 슬롯
     extra_multipliers: Dict[str, float] = field(default_factory=dict)
 
+    #: DoT 스냅샷용 오버라이드. 지정되면 시전자의 현재 스탯 대신 이 값을 쓴다.
+    #: docs/mechanics.md 5.6
+    base_damage_override: Optional[float] = None
+    attacker_level_override: Optional[int] = None
+
+    @property
+    def attacker_level(self) -> int:
+        if self.attacker_level_override is not None:
+            return self.attacker_level_override
+        return self.attacker.level
+
 
 @dataclass
 class DamageResult:
@@ -95,7 +106,12 @@ class DamageResult:
 
 
 def base_damage(ctx: DamageContext) -> float:
-    """BaseDMG = (스킬 배율) x (기준 스탯) + 고정 추가값. 근거: docs/mechanics.md 2.2"""
+    """BaseDMG = (스킬 배율) x (기준 스탯) + 고정 추가값. 근거: docs/mechanics.md 2.2
+
+    DoT 스냅샷 모드에서는 부여 시점에 계산해 둔 값을 그대로 쓴다.
+    """
+    if ctx.base_damage_override is not None:
+        return ctx.base_damage_override
     if ctx.scaling is ScalingStat.ATK:
         scale_value = ctx.attacker.stat(Stat.ATK)
     elif ctx.scaling is ScalingStat.DEF:
@@ -143,7 +159,7 @@ def def_multiplier(ctx: DamageContext) -> float:
     )
     effective_def = base * (1.0 + percent - (ctx.def_reduction + ctx.def_ignore)) + flat
     effective_def = max(0.0, effective_def)
-    denominator = effective_def + DEF_LEVEL_CONSTANT + DEF_LEVEL_SLOPE * ctx.attacker.level
+    denominator = effective_def + DEF_LEVEL_CONSTANT + DEF_LEVEL_SLOPE * ctx.attacker_level
     return 1.0 - effective_def / denominator
 
 

@@ -35,6 +35,7 @@ from ..stats.stat import Stat
 from . import scheduler
 from .actions import Action, BasicAttackAction, SkillAction, SkipAction, UltimateAction
 from .damage import DamageContext, DamageResult, compute_damage
+from . import status
 from .resources import can_pay_skill_points
 from .state import BattleConfig, BattleState
 
@@ -127,6 +128,8 @@ class BattleEngine:
             uid=actor.uid,
         )
         self.bus.emit(self, state, TurnStart(uid=actor.uid))
+        # 지속 피해 발동과 턴 시작 기준 지속시간 감소 (docs/mechanics.md 5.5~5.6)
+        status.on_turn_start(self, state, actor)
         return actor.uid
 
     def _sync_cycle(self, state: BattleState) -> None:
@@ -154,6 +157,8 @@ class BattleEngine:
         unit = state.unit(uid)
         if not unit.alive:
             return []
+        if status.is_action_blocked(unit):
+            return [SkipAction(actor_uid=uid, reason="행동 불능")]
 
         definition = UNIT_DEFINITIONS.try_get(unit.definition_id)
         if definition is None:
@@ -274,6 +279,7 @@ class BattleEngine:
         unit = state.unit(uid)
         if unit.alive:
             scheduler.reset_gauge(unit)
+            status.on_turn_end(self, state, unit)
         self.bus.emit(self, state, TurnEnd(uid=uid))
         state.active_uid = None
         state.turn_count += 1
@@ -283,6 +289,10 @@ class BattleEngine:
         """턴 1회 = 행동자 선정 -> 행동 -> 턴 종료."""
         uid = self.advance_to_next_turn(state)
         if uid is None:
+            return None
+        unit = state.unit(uid)
+        if not unit.alive or state.is_over:
+            self.end_turn(state)
             return None
         chosen = action if action is not None else self.choose_action(state, uid)
         self.perform(state, chosen)
@@ -335,18 +345,25 @@ class BattleEngine:
     # 데미지 / HP
     # ------------------------------------------------------------------
 
-    def deal_damage(self, state: BattleState, ctx: DamageContext) -> DamageResult:
-        """데미지 판정 1회. 이벤트를 통해 외부 효과가 개입할 수 있다."""
+    def deal_damage(self, state: BattleState, ctx: DamageContext, crit_mode=None) -> DamageResult:
+        """데미지 판정 1회. 이벤트를 통해 외부 효과가 개입할 수 있다.
+
+        ``crit_mode`` 를 지정하면 설정을 무시한다. DoT 는 치명타가 없으므로
+        항상 ``CritMode.NEVER`` 로 호출된다 (docs/mechanics.md 5.6).
+        """
         self.bus.emit(self, state, BeforeDamage(ctx=ctx))
-        result = compute_damage(ctx, crit_mode=self.config.crit_mode, rng=state.rng)
+        result = compute_damage(
+            ctx, crit_mode=crit_mode or self.config.crit_mode, rng=state.rng
+        )
         state.log.add(
             state.elapsed_av,
             state.cycle,
             "damage",
-            "{} -> {} {:.1f} 피해{}".format(
+            "{} -> {} {:.1f} {}{}".format(
                 self._label(state, ctx.attacker),
                 self._label(state, ctx.defender),
                 result.amount,
+                "지속 피해" if DamageTag.DOT in ctx.tags else "피해",
                 " (치명타)" if result.is_crit else "",
             ),
             attacker=ctx.attacker.uid,
@@ -371,6 +388,9 @@ class BattleEngine:
     def _defeat(self, state: BattleState, unit: Unit) -> None:
         unit.alive = False
         unit.current_hp = 0.0
+        # 쓰러진 유닛의 상태 효과는 사라진다
+        unit.effects.clear()
+        status.rebuild_effect_modifiers(unit)
         state.log.add(
             state.elapsed_av, state.cycle, "defeat",
             f"{self._label(state, unit)} 전투 불능", uid=unit.uid,
