@@ -290,7 +290,103 @@ V0.1 은 Toughness 시스템 자체(약점 격파, 감소량, 회복)를 구현�
 
 ---
 
-## 5. 참고 자료
+## 5. 상태 효과 (버프 / 디버프)
+
+조사일: 2026-08-19
+
+### 5.1 분류 **[확인됨]**
+
+> "There are 3 distinct types of Status Effects: Buffs, Debuffs, and Other Effects."
+> 디버프 하위 분류: "Crowd Control", "DoT", "Slow", "Weaken"
+> — Fandom Wiki, Status Effect
+
+### 5.2 해제 **[확인됨]**
+
+> "Buffs applied to enemies can be removed by certain abilities, unless stated otherwise."
+> 디버프도 "(Unremovable)" 표기가 없으면 제거 가능
+> — Fandom Wiki, Status Effect
+
+→ 효과 정의에 `removable` 플래그를 둔다.
+
+### 5.3 중첩 **[확인됨 — 단, 일반 규칙은 없음]**
+
+중첩 상한은 효과마다 데이터로 정해져 있다.
+
+> "Wind Shear can stack up to 5 time(s)", "Arcana can stack up to 50 times",
+> "Deep Freeze: Can stack up to 3 time(s)"
+> — Fandom Wiki, Status Effect
+
+일반 규칙이 존재하지 않으므로 `max_stacks` 를 **효과 데이터**로 둔다.
+재적용 시 동작(지속시간 갱신 / 중첩 증가 / 둘 다)도 마찬가지로 `refresh` 정책으로 데이터화한다.
+
+### 5.4 디버프 적용 확률 **[부분 확인]**
+
+> "Real Chance = Skill Base Chance x (1 + Effect Hit Rate) x (1 - Effect RES) x (1 - Debuff RES)"
+> — ManaBuy, Effect Hit Rate 가이드
+
+공개된 EHR 계산기도 정확히 같은 4개 변수(기본 확률 / 효과 명중 / 효과 저항 / 디버프 저항)를
+입력으로 받는다. Fandom 은 "Effect RES 가 Debuff RES 와 함께 확률을 낮춘다"고만 하고
+식은 제시하지 않는다.
+
+→ 위 곱연산 형태로 구현하되 **[부분 확인]** 으로 표시한다. 최종 확률은 1.0 으로 상한.
+
+버프(아군이 아군에게 거는 것)는 이 판정을 거치지 않는다.
+
+### 5.5 지속시간 감소 시점 **[미확인]**
+
+Fandom 은 개별 효과 설명에서 "decreases by 1 turn at the start of Huohuo's every turn"
+처럼 **효과마다 다르게** 서술하고, 일반 규칙은 제시하지 않는다.
+
+구현:
+
+- `DurationTiming` 열거형으로 효과마다 지정 (`OWNER_TURN_END` / `OWNER_TURN_START`)
+- 기본값은 **소유자의 턴 종료 시 1 감소**
+
+기본값을 이렇게 정한 이유: "2턴 지속" 인 DoT 가 정확히 2번 발동하려면
+`턴 시작 → DoT 발동 → 행동 → 턴 종료 → 지속시간 감소` 순서여야 한다.
+턴 시작에 감소시키면 발동 횟수가 1회 줄어든다.
+**게임 자료로 확인한 것이 아니라 관측되는 동작에 맞춘 선택**이므로 실측 대상이다.
+
+### 5.6 DoT (지속 피해)
+
+**발동 시점 [확인됨]**
+
+> "DoT is a type of damage dealt through certain debuffs at the beginning of a target's turn."
+> — Fandom Wiki, DoT
+
+**치명타 [확인됨, 2개 자료]**
+
+> "Unlike regular damage, DoT cannot score CRIT hits." — Fandom Wiki, DoT
+> "all types of DoT, whether normal or break, cannot land critical hits." — GachaGuru
+
+**계산식 [확인됨]**
+
+> "DoTs applied by character abilities ... have their DMG calculated very similarly to
+> regular damage, with the only difference being that CRIT is not taken into account."
+> — Fandom Wiki, DoT
+
+즉 우리 데미지 파이프라인을 그대로 쓰되 치명타 배수만 1.0 으로 고정한다.
+`DMG% Multiplier` 에 DoT DMG% 가 포함된다는 것도 Prydwen 에서 확인됨.
+
+**처리 순서 [확인됨]**
+
+> "DoTs are dealt in chronological order based on when they are inflicted, with DoTs
+> inflicted earlier dealt first"
+> — Fandom Wiki, DoT
+
+→ 효과에 부여 순번(`applied_seq`)을 저장하고 그 순서로 발동한다.
+
+**스냅샷 여부 [미확인]**
+
+부여 시점의 시전자 스탯을 고정하는지, 발동 때마다 다시 계산하는지 자료를 찾지 못했다.
+
+구현: `BattleConfig.dot_snapshot` (기본 True) 로 두 방식을 모두 지원하고,
+스냅샷 모드에서는 부여 시점의 기본 피해량과 시전자 레벨을 효과에 저장한다.
+방어 측 배수(DEF/RES/취약/격파)는 두 모드 모두 **발동 시점의 값**을 쓴다.
+
+---
+
+## 6. 참고 자료
 
 - KQM — How Do Speed and Turn Order Work in Honkai: Star Rail? <https://hsr.keqingmains.com/misc/speed-guide/>
 - KQM SRL — Complete Damage Formula <https://github.com/KQM-git/SRL/blob/master/docs/combat-mechanics/damage/damage-formula.md>
@@ -302,3 +398,8 @@ V0.1 은 Toughness 시스템 자체(약점 격파, 감소량, 회복)를 구현�
 - KQM — Beginner Guide <https://hsr.keqingmains.com/misc/beginner-guide/>
 - Fandom Wiki — Energy <https://honkai-star-rail.fandom.com/wiki/Energy>
 - Fandom Wiki — Energy Regeneration Rate <https://honkai-star-rail.fandom.com/wiki/Energy_Regeneration_Rate>
+- Fandom Wiki — Status Effect <https://honkai-star-rail.fandom.com/wiki/Status_Effect>
+- Fandom Wiki — DoT <https://honkai-star-rail.fandom.com/wiki/DoT>
+- Fandom Wiki — Effect RES <https://honkai-star-rail.fandom.com/wiki/Effect_RES>
+- ManaBuy — How to Calculate Effect Hit Rate <https://manabuy.com/blog/news/how-to-calculate-effect-hit-rate-honkai-star-rail-guide>
+- GachaGuru — Ultimate Guide to DoT <https://www.gachaguru.com/honkai-star-rail/ultimate-guide-damage-over-time-dot>
