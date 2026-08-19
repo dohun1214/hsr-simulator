@@ -11,9 +11,13 @@ import argparse
 from . import BattleConfig, BattleEngine, CritMode, build_battle, definitions
 
 
-def make(config: BattleConfig, enemies=("test_enemy_a", "test_enemy_b")):
+def make(
+    config: BattleConfig,
+    allies=("test_ally_a", "test_ally_b"),
+    enemies=("test_enemy_a", "test_enemy_b"),
+):
     state = build_battle(
-        allies=definitions("test_ally_a", "test_ally_b"),
+        allies=definitions(*allies),
         enemies=definitions(*enemies),
         config=config,
     )
@@ -23,7 +27,11 @@ def make(config: BattleConfig, enemies=("test_enemy_a", "test_enemy_b")):
 
 
 def demo_battle(config: BattleConfig) -> None:
-    engine, state = make(config, enemies=("test_enemy_c", "test_enemy_c"))
+    engine, state = make(
+        config,
+        allies=("test_ally_a", "test_ally_b", "test_ally_c"),
+        enemies=("test_enemy_c", "test_enemy_c"),
+    )
     outcome = engine.run(state)
     print(state.log.render())
     print("-" * 62)
@@ -37,9 +45,14 @@ def demo_battle(config: BattleConfig) -> None:
             if unit.max_energy
             else ""
         )
+        effects = (
+            "  효과: " + ", ".join(f"{e.effect_id}x{e.stacks}" for e in unit.effects)
+            if unit.effects
+            else ""
+        )
         print(
             f"  {unit.uid} HP {unit.current_hp:8.1f} / {unit.max_hp:8.1f}"
-            f"  생존={unit.alive}{energy}"
+            f"  생존={unit.alive}{energy}{effects}"
         )
 
 

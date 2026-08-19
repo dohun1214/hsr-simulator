@@ -51,6 +51,7 @@ src/hsr_sim/
   battle/
     state.py       BattleState, BattleConfig (스킬 포인트 포함)
     resources.py   스킬 포인트 / 에너지 증감과 상한 처리
+    status.py      상태 효과 부여/중첩/만료, 적용 확률, DoT 발동
     scheduler.py   Action Gauge / Action Value / 사이클
     damage.py      데미지 계산 파이프라인
     targeting.py   대상 지정 규칙
@@ -142,6 +143,24 @@ V0.2 는 정책 함수(`ultimate_policy`)로 이 축을 분리해 두었고,
 세 행동을 모두 처리하고, `ACTION_HANDLERS` 에 세 이름으로 등록되어 있을 뿐이다.
 
 캐릭터별 분기가 코드로 새어 나오지 않게 하는 두 번째 장치다.
+
+### 3.8 상태 효과는 "목록이 원본, 스탯 수정자는 파생물"
+
+`Unit.effects` 는 `(효과 id, 중첩, 남은 턴)` 만 담는 순수 데이터다.
+중첩 상한·스탯 수정자·DoT 설정은 전부 `STATUS_EFFECTS` 레지스트리의 정의에 있다.
+
+효과가 붙거나 떨어지거나 중첩이 바뀌면 `status.rebuild_effect_modifiers(unit)` 가
+`source_id="effect:..."` 인 수정자를 전부 지우고 다시 만든다.
+
+이렇게 한 이유:
+
+- `Unit.stat()` 이 레지스트리를 몰라도 된다 → BattleState 가 계속 순수 데이터로 남는다
+- 중첩 변화가 스탯에 자동 반영된다 (수정자를 직접 관리하면 반드시 어긋난다)
+- 유물/광추처럼 효과가 아닌 수정자와 섞여도 서로를 건드리지 않는다
+
+DoT 도 같은 틀 위에 있다. `StatusEffectDefinition.dot` 이 있으면 DoT 이고,
+발동은 `status.on_turn_start()` 가 `applied_seq` 순서로 처리한다
+(게임의 "부여된 순서대로" 규칙, docs/mechanics.md 5.6).
 
 ## 4. 탐색을 위한 API (이미 준비된 부분)
 
