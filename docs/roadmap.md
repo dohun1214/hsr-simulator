@@ -50,6 +50,7 @@
 | 25 | HardLevelGroup 의 SpeedRatio(80렙 1.2)가 실제로 적용되는지 | 적용 | 적의 행동 순서 |
 | 26 | 적 효과 저항 = 템플릿 기본값 + 레벨 보너스 인지 | 합산 | 디버프 명중률 |
 | 27 | 스킬 레벨 기본값(일반 6 / 스킬·필살기 10) | 성혼 0 기준 만렙으로 가정 | 캐릭터 피해량 |
+| 28 | 스테이지별 HardLevelGroup / 레벨 / 버프 | `StageConfig` 미임포트. 로더에 수동 지정 인자만 있음 | 엔드게임 적 스탯 전부 |
 
 이 표의 항목이 해소되면 `docs/mechanics.md` 의 해당 절을 **[확인됨]** 으로 승격하고,
 회귀 테스트를 추가한다.
@@ -87,7 +88,9 @@
 ### ~~V0.7.1 — 행적 + 실측 검증 모드~~ (완료)
 - ~~행적 5196노드 / 특성 한국어 303개 / 게임 화면 스탯 입력형 검증 모드~~
 
-### V0.8 — 광추 · 유물 · 성혼
+### V0.8 — 광추 · 유물 · 성혼 + 스테이지 데이터
+- `StageConfig` / `ChallengeBossMazeConfig` / `MazeBuff` 임포트
+  (스테이지가 적 레벨과 스케일링 곡선, 전체 버프를 정한다 — docs/data_sources.md 5.6)
 - Dimbreath TurnBasedGameData / StarRailRes / HSRMaps 로부터 캐릭터·적·스킬 임포트
 - **공식 한국어 명칭 확보 및 교차검증** (`LocalizedName.ko_verified`)
   → `TextMap/TextMapKR_0.json` 에 존재함을 확인. docs/data_sources.md 참고
