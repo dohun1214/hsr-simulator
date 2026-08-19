@@ -460,7 +460,124 @@ Fandom 과 KQM 은 3/4/5/6 으로, GamesRadar 와 GachaGuru 는 75/100/125/150 �
 
 ---
 
-## 7. 참고 자료
+## 7. 적의 행동 패턴 (AI)
+
+조사일: 2026-08-19. **게임 데이터 파일을 직접 확인한 결과다** (docs/data_sources.md 참고).
+
+적은 무작위로 행동하지 않는다. `Config/ConfigAI/Monster_*.json` 에 362개의 AI 정의가 있다.
+
+### 7.1 AI 구조 **[확인됨 — 게임 데이터]**
+
+```json
+{
+  "AIName": "Monster_AML_Minion01_00",
+  "VariableList": [ { "Name": "CurrentPhase", "Value": "DG_010_Phase01" } ],
+  "DecisionList": [
+    {
+      "DecisionName": "UseSkill01",
+      "RootTask": { "$type": "SequenceConfig", "TaskList": [
+          { "$type": "SelectAISkillTarget", "SkillName": "Skill01", "Selector": {...} },
+          { "$type": "UseSkill", "SkillName": "Skill01" } ] },
+      "ScoreEvaluatorType": "DefaultDSE",
+      "ConsiderAxisList": [
+        { "$type": "CheckSkillUsabilityAxis", "SkillName": "Skill01",
+          "InitialCD": 1, "CD": 1, "CheckScore": { "Value": 0.1 } } ]
+    }
+  ]
+}
+```
+
+즉 **효용 기반(Utility AI) 결정 시스템**이다.
+
+- AI 는 `Decision` 목록을 가진다
+- 각 Decision 은 `ConsiderAxisList` 로 **점수**를 계산한다
+- 점수가 가장 높은 Decision 의 `RootTask` 를 실행한다 (`ScoreEvaluatorType` 은 전부 `DefaultDSE`)
+
+362개 AI 전체 통계:
+
+- Decision 개수: 1~11개 (2개가 가장 흔함)
+- 결정당 axis 개수: **1개가 1917건**, 0개 17건, 2개 13건 → 사실상 "조건 1개 + 점수 1개"
+- axis 종류: `CheckPredicateAxis` 1889 / `CheckSkillUsabilityAxis` 52 / `ChoseSequencedSkillAxis` 2
+- `SuccessScore` 분포: **0.5 가 1362건**, 1 이 437건, 0.4 / 0.9 / 0.99 / 1.5 / 2 소수
+- 스킬 쿨다운 `(InitialCD, CD)`: (1,1) 43건, (2,2) 3건, (5,6) / (3,3) / (2,1) / (1,3) / (1,2) / (1,0) 각 1건
+
+### 7.2 가장 흔한 AI: 고정 스킬 순환 **[확인됨 — 게임 데이터]**
+
+613개 몬스터 템플릿 중 **158개**가 `Monster_Common_SequenceThree_AI.json` 을 쓴다.
+그 내용은 단 하나의 Decision 이다.
+
+```json
+{ "DecisionName": "UseSequenceSkill",
+  "RootTask": { "TaskList": [ { "$type": "UseSequencedSkill" } ] },
+  "ConsiderAxisList": [ { "$type": "ChoseSequencedSkillAxis", "CheckScore": 1 } ] }
+```
+
+실제 순환 목록은 몬스터 데이터의 `AISkillSequence` (또는 `OverrideAISkillSequence`) 에 있다.
+길이 분포: 1개 175, 3개 37, 2개 28, 5개 19, 6개 7, 8개 2, 4개 2.
+
+즉 **대부분의 잡몹은 "정해진 스킬을 순서대로 반복"** 한다.
+
+### 7.3 조건(Predicate)의 종류 **[확인됨 — 게임 데이터]**
+
+`CheckPredicateAxis` 안에서 쓰이는 조건들 (등장 횟수):
+
+| 조건 | 횟수 | 의미 |
+|---|---|---|
+| `ByIsContainModifier` | 328 | 특정 상태 효과를 가지고 있는가 |
+| `ByCompareCharacterNumber` | 199 | 살아 있는 캐릭터 수 비교 |
+| `ByCompareDynamicValue` | 90 | AI 내부 카운터 비교 |
+| `ByCompareMonsterID` | 43 | 특정 몬스터인가 |
+| `ByCheckCustomValueBool` | 35 | 커스텀 플래그 |
+| `ByCompareMonsterPhase` | - | 현재 페이즈 비교 |
+| `ByAnd` / `ByAny` | 37 / 36 | 논리 조합 |
+
+행동 순환은 `DefineDynamicValue` (1845회), `SetDynamicValue` (165회),
+`SetDynamicValueByAddValue` (166회) 로 관리되는 **카운터**로 구현되어 있다.
+
+### 7.4 대상 선택 **[확인됨 — 게임 데이터]**
+
+`UseSkill` 2393건 중 `SelectAISkillTarget` 이 붙은 것은 301건뿐이다.
+나머지는 **기본 대상 선택(=어그로, docs/mechanics.md 6장)** 을 쓴다.
+지정 선택은 `AIModifierNameSelector` (특정 상태 효과가 걸린 대상) 형태가 대부분이다.
+
+### 7.5 행동 게이지 관련 데이터 **[확인됨 — 게임 데이터]**
+
+- `MonsterSkillConfig.DelayRatio` — 스킬 사용 후 행동 게이지 배수.
+  1 이 3389건이고 1.25 / 1.5 / 1.75 / 2 / 0.5 등이 존재.
+  → 큰 기술일수록 다음 턴이 늦게 온다.
+- `MonsterTemplateConfig.InitialDelayRatio` — 전투 시작 시 행동 게이지 배수.
+  1 이 545건, **0.5 가 51건**, 0.25 / 0.75 / 0.2 / 1.5 소수.
+  → 일부 적은 처음부터 빠르게/느리게 등장한다.
+
+두 값 모두 우리 AG 모델에 그대로 대응한다: `AG = 10000 x ratio`.
+
+**[유도됨]**: 데이터 필드명과 값 분포로부터의 해석이다. 필드 설명 문서는 없다.
+
+### 7.6 적의 기본 저항 **[확인됨 — 게임 데이터]**
+
+`MonsterTemplateConfig.StatusResistanceBase` 분포: 0.2 가 267개, 0.3 이 193개, 0.1 이 77개.
+→ **적은 기본 효과 저항을 가진다.** 기본값 0 으로 두면 안 된다.
+
+`MonsterConfig.DebuffResist` 는 **효과 id 가 아니라 태그** 단위다
+(`STAT_CTRL`, `STAT_CTRL_Frozen`, `STAT_Confine`, `STAT_Entangle`, `STAT_DOT_Burn` ...).
+따라서 상태 효과에 태그를 붙이고, 저항은 태그로 조회해야 한다.
+
+`STAT_CTRL` 과 `STAT_CTRL_Frozen` 이 동시에 존재하므로 태그는 계층적이다.
+여러 태그가 걸리면 **가장 큰 저항**을 쓴다 — **[유도됨]**, 합산인지 최댓값인지는 미확인.
+
+### 7.7 미확인 **[미확인]**
+
+| 항목 | 현재 처리 |
+|---|---|
+| 동점 점수 Decision 의 선택 규칙 (0.5 가 압도적으로 많다) | 목록 순서상 먼저 오는 것을 선택 |
+| 스킬 순환의 시작 위치와 되감기 규칙 | 0번부터 시작해 순환 |
+| 쿨다운이 감소하는 시점 | 소유자의 턴 종료 시 1 감소 |
+| 페이즈 전환 조건 | 데이터에 조건 없음. 외부에서 `set_phase()` 로 지정 |
+| 태그별 저항이 합산인지 최댓값인지 | 최댓값 |
+
+---
+
+## 8. 참고 자료
 
 - KQM — How Do Speed and Turn Order Work in Honkai: Star Rail? <https://hsr.keqingmains.com/misc/speed-guide/>
 - KQM SRL — Complete Damage Formula <https://github.com/KQM-git/SRL/blob/master/docs/combat-mechanics/damage/damage-formula.md>
@@ -480,3 +597,9 @@ Fandom 과 KQM 은 3/4/5/6 으로, GamesRadar 와 GachaGuru 는 75/100/125/150 �
 - Fandom Wiki — Aggro <https://honkai-star-rail.fandom.com/wiki/Aggro>
 - GachaGuru — Navigating the Aggro System <https://www.gachaguru.com/honkai-star-rail/navigating-the-aggro-system-your-ultimate-guide>
 - GamesRadar — Honkai Star Rail taunt values <https://www.gamesradar.com/honkai-star-rail-taunt-values/>
+
+게임 데이터 (직접 확인):
+
+- DimbreathBot/TurnBasedGameData — `ExcelOutput/Monster*.json`, `Config/ConfigAI/Monster_*.json`, `TextMap/TextMapKR_0.json`
+- FortOfFans/HSRMaps — `en/monster/*.json`
+- 상세는 docs/data_sources.md
