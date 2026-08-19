@@ -24,6 +24,37 @@ def _name(ko: str, en: str) -> LocalizedName:
     return LocalizedName(ko=ko, en=en, ko_verified=True)
 
 
+def monster_skill(
+    skill_id: str,
+    name_ko: str,
+    multiplier: float,
+    element,
+    shape: str = "single",
+    energy_to_target: float = 10.0,
+    delay_ratio: float = 1.0,
+    phases: tuple = (),
+    inflicts: tuple = (),
+) -> SkillDefinition:
+    """적 스킬. 게임 데이터의 MonsterSkillConfig 필드에 대응한다.
+
+    energy_to_target = SPHitBase (가장 흔한 값 10), delay_ratio = DelayRatio,
+    phases = PhaseList. docs/mechanics.md 7.5
+    """
+    return SkillDefinition(
+        skill_id=skill_id,
+        name=_name(name_ko, skill_id),
+        tag=DamageTag.SKILL,
+        kind=SkillKind.SKILL,
+        element=element,
+        multiplier=multiplier,
+        target_rule=TargetRule(side="enemy", shape=shape),
+        energy_grant_to_target=energy_to_target,
+        delay_ratio=delay_ratio,
+        phases=phases,
+        inflicts=inflicts,
+    )
+
+
 def basic_skill(multiplier: float, energy_to_target: float = 0.0) -> SkillDefinition:
     """일반 공격: 스킬 포인트 +1, 에너지 +20"""
     return SkillDefinition(
@@ -183,6 +214,7 @@ TEST_ENEMY_A = UnitDefinition(
     skills={"basic": basic_skill(1.0, energy_to_target=10.0)},
     weaknesses=(Element.PHYSICAL,),
     max_toughness=60.0,
+    status_resistance=0.2,
     behavior_id="basic_attack_aggro",
 )
 
@@ -202,6 +234,7 @@ TEST_ENEMY_B = UnitDefinition(
     skills={"basic": basic_skill(0.9, energy_to_target=10.0)},
     weaknesses=(Element.FIRE,),
     max_toughness=30.0,
+    status_resistance=0.2,
     behavior_id="basic_attack_aggro",
 )
 
@@ -221,7 +254,96 @@ TEST_ENEMY_C = UnitDefinition(
     skills={"basic": basic_skill(0.9, energy_to_target=10.0)},
     weaknesses=(Element.FIRE,),
     max_toughness=30.0,
+    status_resistance=0.2,
     behavior_id="basic_attack_aggro",
+)
+
+
+#: 고정 스킬 순환 적 (게임의 Monster_Common_SequenceThree 형태)
+TEST_ENEMY_SEQUENCE = UnitDefinition(
+    unit_id="test_enemy_sequence",
+    name=_name("테스트 순환 적", "Test Sequence Enemy"),
+    default_side=Side.ENEMY,
+    element=Element.PHYSICAL,
+    base_stats={
+        Stat.MAX_HP: 6000.0,
+        Stat.ATK: 600.0,
+        Stat.DEF: 800.0,
+        Stat.SPD: 100.0,
+    },
+    skills={
+        "basic": monster_skill("basic", "테스트 적 일반 공격", 1.0, Element.PHYSICAL),
+        "sweep": monster_skill(
+            "sweep", "테스트 적 광역 공격", 0.6, Element.PHYSICAL,
+            shape="aoe", energy_to_target=15.0, delay_ratio=1.5,
+        ),
+    },
+    basic_attack_id="basic",
+    weaknesses=(Element.PHYSICAL,),
+    max_toughness=60.0,
+    status_resistance=0.2,
+    ai_id="common_sequence",
+    skill_sequence=("basic", "sweep", "basic"),
+    behavior_id="enemy_ai",
+)
+
+#: 카운터 기반 강공격 적
+TEST_ENEMY_SMASHER = UnitDefinition(
+    unit_id="test_enemy_smasher",
+    name=_name("테스트 강타 적", "Test Smasher"),
+    default_side=Side.ENEMY,
+    element=Element.PHYSICAL,
+    base_stats={
+        Stat.MAX_HP: 6000.0,
+        Stat.ATK: 600.0,
+        Stat.DEF: 800.0,
+        Stat.SPD: 100.0,
+    },
+    skills={
+        "basic": monster_skill("basic", "테스트 적 일반 공격", 1.0, Element.PHYSICAL),
+        "smash": monster_skill(
+            "smash", "테스트 강타", 2.0, Element.PHYSICAL, delay_ratio=1.5
+        ),
+        "enrage": monster_skill(
+            "enrage", "테스트 격노", 0.5, Element.PHYSICAL,
+            inflicts=(("test_def_down", 1.0),),
+        ),
+    },
+    basic_attack_id="basic",
+    weaknesses=(Element.PHYSICAL,),
+    max_toughness=60.0,
+    status_resistance=0.2,
+    ai_id="charge_and_smash",
+    behavior_id="enemy_ai",
+)
+
+#: 페이즈 보스
+TEST_BOSS = UnitDefinition(
+    unit_id="test_boss",
+    name=_name("테스트 보스", "Test Boss"),
+    default_side=Side.ENEMY,
+    element=Element.QUANTUM,
+    base_stats={
+        Stat.MAX_HP: 20000.0,
+        Stat.ATK: 800.0,
+        Stat.DEF: 1000.0,
+        Stat.SPD: 105.0,
+    },
+    skills={
+        "basic": monster_skill("basic", "테스트 보스 일반 공격", 1.0, Element.QUANTUM),
+        "nuke": monster_skill(
+            "nuke", "테스트 보스 필살기", 2.5, Element.QUANTUM,
+            shape="aoe", phases=(2,), delay_ratio=2.0, energy_to_target=20.0,
+        ),
+    },
+    basic_attack_id="basic",
+    weaknesses=(Element.FIRE,),
+    max_toughness=180.0,
+    status_resistance=0.3,
+    initial_delay_ratio=0.5,
+    debuff_res={"STAT_CTRL": 1.0},
+    ai_id="phase_boss",
+    behavior_id="enemy_ai",
 )
 
 
@@ -232,5 +354,8 @@ for _definition in (
     TEST_ENEMY_A,
     TEST_ENEMY_B,
     TEST_ENEMY_C,
+    TEST_ENEMY_SEQUENCE,
+    TEST_ENEMY_SMASHER,
+    TEST_BOSS,
 ):
     UNIT_DEFINITIONS.register(_definition.unit_id, _definition)

@@ -131,11 +131,35 @@ def test_application_chance_formula():
     source = state.unit("A1")
     target = state.unit("E1")
     source.modifiers.append(StatModifier(Stat.EFFECT_HIT_RATE, ModifierKind.FLAT, 0.5))
+    target.base_stats[Stat.EFFECT_RES] = 0.0  # 적의 기본 효과 저항을 지우고 시작
     target.modifiers.append(StatModifier(Stat.EFFECT_RES, ModifierKind.FLAT, 0.1))
     target.debuff_res["test_def_down"] = 0.2
 
     chance = status.application_chance(source, target, "test_def_down", 0.8)
     assert chance == pytest.approx(0.8 * 1.5 * 0.9 * 0.8)
+
+
+def test_enemies_have_base_effect_resistance():
+    """게임 데이터 StatusResistanceBase 는 0.1~0.3 이며 0 이 아니다.
+    근거: docs/mechanics.md 7.6
+    """
+    _, state = make()
+    assert state.unit("E1").stat(Stat.EFFECT_RES) == pytest.approx(0.2)
+    # 기본 확률 100% 도 적의 저항 때문에 80% 가 된다
+    assert status.application_chance(
+        state.unit("A1"), state.unit("E1"), "test_def_down", 1.0
+    ) == pytest.approx(0.8)
+
+
+def test_debuff_resistance_is_looked_up_by_tag():
+    """게임 데이터의 DebuffResist 는 효과 id 가 아니라 태그 단위다."""
+    _, state = make(enemies=("test_boss",))
+    boss = state.unit("E1")
+    assert boss.debuff_res == {"STAT_CTRL": 1.0}
+    # 행동 불능 효과는 STAT_CTRL 태그를 가지므로 완전 저항
+    assert status.debuff_resistance(boss, "test_stun") == 1.0
+    # 화상은 다른 태그이므로 영향 없음
+    assert status.debuff_resistance(boss, "test_burn") == 0.0
 
 
 def test_application_chance_is_capped_at_one():
@@ -227,6 +251,7 @@ def test_skill_applies_its_debuff_after_damage():
     """방어력 감소는 그 타격 자체에는 적용되지 않고 다음 타격부터 적용된다."""
     engine, state = make()
     enemy = state.unit("E1")
+    enemy.base_stats[Stat.EFFECT_RES] = 0.0  # 확률 판정을 확정적으로 만든다
     state.active_uid = "A1"
     engine.perform(state, SkillAction(actor_uid="A1", target_uid="E1"))
     first_hit = enemy.max_hp - enemy.current_hp

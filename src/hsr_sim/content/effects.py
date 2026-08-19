@@ -68,6 +68,7 @@ TEST_STUN = StatusEffectDefinition(
     category=EffectCategory.DEBUFF,
     debuff_kind=DebuffKind.CROWD_CONTROL,
     base_duration=1,
+    resist_tags=("STAT_CTRL",),
 )
 
 TEST_BURN = StatusEffectDefinition(
@@ -79,6 +80,7 @@ TEST_BURN = StatusEffectDefinition(
     max_stacks=3,
     refresh=RefreshPolicy.STACK_AND_REFRESH,
     dot=DotSpec(element=Element.FIRE, multiplier=0.5, scaling=ScalingStat.ATK, per_stack=True),
+    resist_tags=("STAT_DOT_Burn",),
 )
 
 #: 도발: 자신의 어그로를 크게 올린다.
@@ -112,6 +114,7 @@ TEST_POISON = StatusEffectDefinition(
     max_stacks=1,
     refresh=RefreshPolicy.REFRESH,
     dot=DotSpec(element=Element.QUANTUM, multiplier=0.25, scaling=ScalingStat.ATK),
+    resist_tags=("STAT_DOT_Poison",),
 )
 
 TEST_UNREMOVABLE_MARK = StatusEffectDefinition(

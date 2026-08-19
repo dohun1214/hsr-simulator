@@ -71,6 +71,24 @@ def rebuild_effect_modifiers(unit: Unit) -> None:
 # ---------------------------------------------------------------------------
 
 
+def debuff_resistance(target: Unit, effect_id: str) -> float:
+    """대상의 이 효과에 대한 개별 저항.
+
+    게임 데이터의 `DebuffResist` 는 효과 id 가 아니라 **태그** 단위다
+    (`STAT_CTRL`, `STAT_CTRL_Frozen`, `STAT_DOT_Burn` ...). docs/mechanics.md 7.6
+
+    효과에 붙은 태그들과 효과 id 자체를 모두 조회하고 **가장 큰 값**을 쓴다.
+    합산인지 최댓값인지는 **[미확인]**.
+    """
+    if not target.debuff_res:
+        return 0.0
+    definition = STATUS_EFFECTS.try_get(effect_id)
+    keys = [effect_id]
+    if definition is not None:
+        keys.extend(definition.resist_tags)
+    return max((target.debuff_res.get(k, 0.0) for k in keys), default=0.0)
+
+
 def application_chance(source: Optional[Unit], target: Unit, effect_id: str, base_chance: float) -> float:
     """디버프 적용 확률.
 
@@ -80,7 +98,7 @@ def application_chance(source: Optional[Unit], target: Unit, effect_id: str, bas
     """
     ehr = source.stat(Stat.EFFECT_HIT_RATE) if source is not None else 0.0
     effect_res = target.stat(Stat.EFFECT_RES)
-    debuff_res = target.debuff_res.get(effect_id, 0.0)
+    debuff_res = debuff_resistance(target, effect_id)
     chance = base_chance * (1.0 + ehr) * (1.0 - effect_res) * (1.0 - debuff_res)
     return min(max(chance, 0.0), 1.0)
 
