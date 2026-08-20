@@ -328,6 +328,32 @@ Challenge(엔드게임) 스테이지 1569개 중 **726개가 HardLevelGroup 3** 
 
 ---
 
+## 5.7 격파 효과가 어디에 있나 (2026-08-20)
+
+"격파하면 어떤 디버프가 붙나"를 찾을 때 헤맬 수 있어서 위치를 적어 둔다.
+
+| 무엇 | 파일 | 키 |
+|---|---|---|
+| 격파 효과 7종의 **정의** | `Config/ConfigGlobalModifier/GlobalModifier_Common_Specific.json` | `MCommon_Element_Bleed` / `_Burn` / `_Frozen` / `_Electric` / `_Poison` / `_Entangle` / `_Confine` |
+| 격파 효과의 **공식 한국어 명칭과 설명** | `ExcelOutput/StatusConfig.json` | `StatusID` 30020020 ~ 30020026 |
+| 격파 **기본 피해(레벨별)** | `ExcelOutput/AvatarBreakDamage.json` | — |
+| 속성 부여(은랑류)와 헷갈리기 쉬운 것 | 같은 파일의 `MCommon_WeakType_*` | 이건 **약점 부여**지 격파 효과가 아니다 |
+
+이름 대응에 함정이 두 개 있다.
+
+- **풍화 = `Poison`**, **속박 = `Confine`**, **감전 = `Electric`** 이다.
+  내부 이름만 보고 "중독"·"감금" 같은 이름을 지어내면 안 된다.
+  `StatusConfig.json` 의 한국어 명칭이 정답이다.
+- `MCommon_DOT_Burn` 과 `MCommon_Element_Burn` 은 다른 것이다.
+  앞은 일반 지속 피해용, 뒤가 격파로 붙는 연소다.
+
+**가져오지 못한 것**: 이 정의들 안의 실제 수치.
+피해 배율이 `PostfixExpr` + `DynamicHashes` 로 되어 있어 4장의 적 스킬 배율과 **같은 벽**이다.
+`MDF_TargetMaxHP` 같은 알려진 키 이름으로 해시 함수를 역산해 봤지만
+(fnv1/fnv1a/djb2/sdbm/crc32/murmur3/.NET GetHashCode) 맞지 않았다.
+그래서 수치는 커뮤니티 자료에서 가져오고, 대신 **구조를 하나씩 대조**해서 검증했다
+(docs/mechanics.md 8.6 의 대조표).
+
 ## 6. 실측 검증 방법 (요구사항 13)
 
 캐릭터 스탯을 데이터로 재현하려면 광추·유물·성혼까지 모두 맞춰야 해서 대조가 어렵다.
