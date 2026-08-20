@@ -395,3 +395,105 @@ def test_real_character_breaks_a_real_enemy_and_applies_burn():
     # 화염 배수 2.0, 최대 인성치 60 -> 배수 1.0
     assert seen[0].break_damage == pytest.approx(3767.5535 * 2.0)
     assert target.has_effect("break_burn")
+
+
+# --- 격파 피해 자신은 미격파 배수 0.9 를 받는다 (docs/mechanics.md 8.4) ------
+
+
+def _break_damage_dealt(engine, state, element=Element.PHYSICAL):
+    from hsr_sim.core.enums import DamageTag
+    from hsr_sim.core.events import AfterDamage
+
+    hits = []
+    engine.bus.subscribe(
+        AfterDamage,
+        lambda e, s, ev: hits.append(ev.result.amount)
+        if DamageTag.BREAK in ev.ctx.tags
+        else None,
+    )
+    enemy = state.unit("E1")
+    enemy.base_stats[Stat.DEF] = 0.0  # DEF 배수 1.0 으로 고정
+    toughness.reduce(engine, state, state.unit("A1"), enemy, 60.0, element)
+    return hits[0]
+
+
+def test_break_damage_itself_takes_the_unbroken_multiplier():
+    """격파 상태는 격파 피해를 준 다음에 켜진다. 그래서 0.9 가 곱해진다."""
+    engine, state = make()
+    dealt = _break_damage_dealt(engine, state)
+    assert dealt == pytest.approx(3767.5535 * 2.0 * 0.9)
+
+
+def test_first_bleed_tick_is_about_1_1x_the_break_damage():
+    """상한에 걸린 열상의 첫 틱은 격파 피해의 1/0.9 배가 된다.
+
+    상한 기본값이 격파 피해 기본값과 같은데, 격파 피해만 0.9 를 받기 때문이다.
+    커뮤니티 자료의 '약 1.1배' 서술과 일치한다.
+    """
+    from hsr_sim.core.events import DotTick
+
+    engine, state = make()
+    enemy = state.unit("E1")
+    enemy.base_stats[Stat.MAX_HP] = 10_000_000.0  # 상한에 걸리게 한다
+    enemy.current_hp = enemy.max_hp
+    dealt = _break_damage_dealt(engine, state)
+
+    ticks = []
+    engine.bus.subscribe(DotTick, lambda e, s, ev: ticks.append(ev.amount))
+    while engine.advance_to_next_turn(state) != "E1":
+        engine.end_turn(state)
+
+    assert ticks[0] == pytest.approx(dealt / 0.9)
+
+
+def test_break_gauge_formula_for_entanglement_and_imprisonment():
+    """격파 후 행동 게이지 = 현재 + 총 x (0.25 + 추가지연 x (1 + 격파 특효)).
+
+    격파의 25% 는 격파 특효를 받지 않고(게임 데이터 `StanceBreakState` 의
+    ModifyActionDelay 0.25 는 고정값이다), 얽힘/속박의 추가 지연만 받는다.
+    추가 지연 비율 자체는 자료가 엇갈린다 — docs/roadmap.md 38번.
+    """
+    from hsr_sim.battle.toughness import DEFAULT_BREAK_CONFIG
+
+    for element in (Element.QUANTUM, Element.IMAGINARY):
+        engine, state = make()
+        attacker = state.unit("A1")
+        attacker.base_stats[Stat.BREAK_EFFECT] = 1.0
+        enemy = state.unit("E1")
+        before = enemy.action_gauge
+        toughness.reduce(
+            engine, state, attacker, enemy, 60.0, element, ignores_weakness=True
+        )
+        extra = DEFAULT_BREAK_CONFIG.elements[element].action_delay
+        expected = before + ACTION_GAUGE_FULL * (0.25 + extra * 2.0)
+        assert enemy.action_gauge == pytest.approx(expected)
+
+
+def test_break_damage_multiplier_toggle_is_isolated():
+    """격파 피해가 0.9 를 받는지 1.0 을 받는지는 실측 전까지 설정으로 남겨 둔다."""
+    import dataclasses
+
+    from hsr_sim.battle.toughness import DEFAULT_BREAK_CONFIG
+
+    config = dataclasses.replace(
+        DEFAULT_BREAK_CONFIG, break_damage_before_broken_state=False
+    )
+    engine, state = make(break_config=config)
+    dealt = _break_damage_dealt(engine, state)
+    assert dealt == pytest.approx(3767.5535 * 2.0)  # 0.9 가 아니라 1.0
+
+
+def test_imprisonment_speed_drop_does_not_scale_with_break_effect():
+    """게임 데이터의 속박 정의는 속도 항에만 (1 + 격파특효) 를 곱하지 않는다.
+
+    행동 지연 항에는 곱하고 속도 항에는 곱하지 않는다 — 두 식이 실제로 다르다.
+    """
+    engine, state = make()
+    attacker = state.unit("A1")
+    attacker.base_stats[Stat.BREAK_EFFECT] = 2.0
+    enemy = state.unit("E1")
+    before = enemy.stat(Stat.SPD)
+    toughness.reduce(
+        engine, state, attacker, enemy, 60.0, Element.IMAGINARY, ignores_weakness=True
+    )
+    assert enemy.stat(Stat.SPD) == pytest.approx(before * 0.9)

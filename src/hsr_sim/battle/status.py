@@ -382,24 +382,29 @@ def _decrement(engine, state, unit: Unit, timing: DurationTiming) -> None:
 
 
 def _on_expire(engine, state, unit: Unit, effect_id: str) -> None:
-    """효과가 끝날 때의 부수 효과.
+    """효과가 지속시간을 다 채우고 끝날 때의 부수 효과.
 
-    빙결이 풀리면 다음 턴이 50% 앞당겨진다 (docs/mechanics.md 8.6).
-    효과별로 코드를 늘리지 않기 위해 정의의 `extra` 로 데이터화했다.
+    빙결이 그렇다. 게임 데이터의 빙결 정의는 소유자의 턴에
+    `ModifyCurrentSkillDelayCost = Set 0.5` 를 한다 — 행동을 못 한 대신
+    다음 턴 진입 비용이 1.0 이 아니라 0.5 가 된다. docs/mechanics.md 8.6
+
+    효과별로 코드를 늘리지 않으려고 정의의 `extra` 로 데이터화했다.
+    해제(dispel)로 사라질 때는 호출되지 않는다 — 게임도 소유자의 턴에만 처리한다.
     """
-    from . import scheduler
+    from ..entities.unit import ACTION_GAUGE_FULL
 
     definition = STATUS_EFFECTS.try_get(effect_id)
     if definition is None:
         return
-    advance = float(definition.extra.get("expire_action_advance", 0.0))
-    if advance:
-        scheduler.modify_gauge(unit, advance=advance)
-        state.log.add(
-            state.elapsed_av, state.cycle, "status",
-            f"{unit.uid} {definition.name} 해제 -> 행동 {advance:.0%} 앞당김",
-            uid=unit.uid, effect_id=effect_id,
-        )
+    ratio = definition.extra.get("expire_action_gauge")
+    if ratio is None:
+        return
+    unit.action_gauge = ACTION_GAUGE_FULL * float(ratio)
+    state.log.add(
+        state.elapsed_av, state.cycle, "status",
+        f"{unit.uid} {definition.name} 해제 -> 행동 게이지 {float(ratio):.0%}",
+        uid=unit.uid, effect_id=effect_id,
+    )
 
 
 def on_turn_start(engine, state, unit: Unit) -> None:

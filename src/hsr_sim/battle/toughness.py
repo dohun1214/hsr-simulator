@@ -90,6 +90,9 @@ class BreakConfig:
     use_max_toughness_multiplier: bool = True
     #: 격파 디버프 부여 확률의 기본값
     debuff_base_chance: float = BREAK_DEBUFF_BASE_CHANCE
+    #: 격파 피해 자신이 미격파 배수 0.9 를 받는가. **[유도됨 — 실측 필요]**
+    #: True 면 격파 상태를 켜기 전에 격파 피해를 준다. docs/mechanics.md 8.4
+    break_damage_before_broken_state: bool = True
     #: 속성별 설정
     elements: Dict[Element, BreakEffectSpec] = field(default_factory=dict)
     #: 격파된 대상이 자기 턴을 마치면 인성치를 회복하는가. **[미확인]**
@@ -242,15 +245,19 @@ def _break(engine, state, attacker: Unit, target: Unit, element: Element,
     from . import scheduler, status
     from .damage import DamageContext
 
-    target.toughness_broken = True
     state.log.add(
         state.elapsed_av, state.cycle, "break",
         f"{target.uid} 약점 격파 ({element.value})", uid=target.uid,
     )
 
-    # 행동 25% 지연. docs/mechanics.md 8.4
+    # 행동 25% 지연. 격파 특효의 영향을 받지 않는다. docs/mechanics.md 8.4
     if config.action_delay:
         scheduler.modify_gauge(target, delay=config.action_delay)
+
+    # 격파 상태를 언제 켜느냐로 격파 피해가 0.9 를 받는지 1.0 을 받는지 갈린다.
+    # 자료는 0.9 라고 하고 게임 데이터로는 결론이 나지 않았다. docs/mechanics.md 8.4
+    if not config.break_damage_before_broken_state:
+        target.toughness_broken = True
 
     amount = compute_break_damage(engine, state, attacker, target, element, config)
     if amount > 0.0:
@@ -261,6 +268,8 @@ def _break(engine, state, attacker: Unit, target: Unit, element: Element,
         )
         from ..core.enums import CritMode
         engine.deal_damage(state, ctx, crit_mode=CritMode.NEVER)
+
+    target.toughness_broken = True
 
     spec = config.elements.get(element)
     if spec is not None and spec.effect_id:

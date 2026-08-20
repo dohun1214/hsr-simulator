@@ -75,7 +75,9 @@ BURN = StatusEffectDefinition(
     resist_tags=("STAT_DOT", "STAT_DOT_Burn"),
 )
 
-# 빙결 — 행동 불가 + 턴 시작 시 얼음 피해. 풀릴 때 다음 턴이 50% 앞당겨진다.
+# 빙결 — 행동 불가 + 턴 시작 시 얼음 피해.
+# 자기 턴에 행동을 못 한 대신 다음 턴 진입 비용이 0.5 로 설정된다
+# (게임 데이터: ModifyCurrentSkillDelayCost = Set 0.5).
 FROZEN = StatusEffectDefinition(
     effect_id="break_frozen",
     name=_name("빙결", "Frozen"),
@@ -93,7 +95,7 @@ FROZEN = StatusEffectDefinition(
         use_break_effect=True,
     ),
     resist_tags=("STAT_CTRL", "STAT_CTRL_Frozen", "STAT_CTRL_Frozen_Effect"),
-    extra={"expire_action_advance": 0.5},
+    extra={"expire_action_gauge": 0.5},
 )
 
 # 감전 — 격파 기본 피해의 2배
