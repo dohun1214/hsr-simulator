@@ -383,6 +383,9 @@ class BattleEngine:
         )
         self.apply_hp_change(state, ctx.defender, -result.amount)
         self.bus.emit(self, state, AfterDamage(ctx=ctx, result=result))
+        # 피격으로 중첩이 쌓이는 격파 효과(얽힘). 지속 피해/격파 피해는 제외한다.
+        if not ({DamageTag.DOT, DamageTag.BREAK} & set(ctx.tags)):
+            toughness.on_hit(self, state, ctx.attacker, ctx.defender)
         return result
 
     def apply_hp_change(self, state: BattleState, unit: Unit, delta: float) -> None:

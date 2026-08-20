@@ -108,19 +108,58 @@ def application_chance(source: Optional[Unit], target: Unit, effect_id: str, bas
 # ---------------------------------------------------------------------------
 
 
-def _dot_snapshot(engine, state, source: Optional[Unit], definition) -> Optional[Dict[str, float]]:
+def dot_base_per_stack(engine, source: Optional[Unit], target: Unit, dot) -> float:
+    """DoT 1중첩당 기본 피해.
+
+    일반 DoT 는 시전자의 스탯에 배율을 곱한다.
+    격파 효과는 기준이 다르다 — 격파 기본 피해(공격자 레벨) 또는 **대상**의 최대 HP다.
+    docs/mechanics.md 5.6 / 8.6
+    """
+    from . import toughness
+
+    if dot.scaling is ScalingStat.BREAK_BASE:
+        if source is None:
+            return 0.0
+        table = getattr(engine.config, "break_base_damage_table", None)
+        value = dot.multiplier * toughness.break_base_damage(source.level, table)
+    elif dot.scaling is ScalingStat.TARGET_MAX_HP:
+        multiplier = dot.multiplier
+        if dot.elite_multiplier is not None and toughness.is_elite(target):
+            multiplier = dot.elite_multiplier
+        value = multiplier * target.max_hp
+    elif source is None:
+        return 0.0
+    elif dot.scaling is ScalingStat.ATK:
+        value = dot.multiplier * source.stat(Stat.ATK)
+    elif dot.scaling is ScalingStat.DEF:
+        value = dot.multiplier * source.stat(Stat.DEF)
+    else:
+        value = dot.multiplier * source.stat(Stat.MAX_HP)
+
+    if dot.use_toughness_multiplier:
+        value *= toughness.max_toughness_multiplier(target)
+
+    # 상한은 격파 특효를 곱하기 **전**의 기본 피해에 걸린다 (열상)
+    if dot.cap_break_multiplier is not None and source is not None:
+        table = getattr(engine.config, "break_base_damage_table", None)
+        cap = (
+            dot.cap_break_multiplier
+            * toughness.break_base_damage(source.level, table)
+            * toughness.max_toughness_multiplier(target)
+        )
+        value = min(value, cap)
+
+    if dot.use_break_effect and source is not None:
+        value *= 1.0 + source.stat(Stat.BREAK_EFFECT)
+    return value
+
+
+def _dot_snapshot(engine, state, source: Optional[Unit], target: Unit, definition):
     """DoT 부여 시점의 시전자 정보를 고정한다. docs/mechanics.md 5.6"""
     if definition.dot is None or source is None:
         return None
-    dot = definition.dot
-    if dot.scaling is ScalingStat.ATK:
-        scale_value = source.stat(Stat.ATK)
-    elif dot.scaling is ScalingStat.DEF:
-        scale_value = source.stat(Stat.DEF)
-    else:
-        scale_value = source.stat(Stat.MAX_HP)
     return {
-        "base_per_stack": dot.multiplier * scale_value,
+        "base_per_stack": dot_base_per_stack(engine, source, target, definition.dot),
         "level": float(source.level),
         "dmg_bonus": 0.0,
     }
@@ -150,7 +189,7 @@ def apply_effect(
             stacks=min(stacks, definition.max_stacks),
             remaining_turns=duration,
             applied_seq=state.effect_seq,
-            snapshot=_dot_snapshot(engine, state, source, definition)
+            snapshot=_dot_snapshot(engine, state, source, target, definition)
             if state_uses_snapshot(engine)
             else None,
         )
@@ -166,7 +205,7 @@ def apply_effect(
         if source is not None:
             existing.source_uid = source.uid
             if state_uses_snapshot(engine):
-                existing.snapshot = _dot_snapshot(engine, state, source, definition)
+                existing.snapshot = _dot_snapshot(engine, state, source, target, definition)
 
     rebuild_effect_modifiers(target)
     effect = target.effect(effect_id)
@@ -302,14 +341,7 @@ def _tick_dots(engine, state, unit: Unit) -> None:
             level = int(effect.snapshot["level"])
             dmg_bonus = effect.snapshot["dmg_bonus"]
         elif source is not None:
-            ctx_scale = (
-                source.stat(Stat.ATK)
-                if dot.scaling is ScalingStat.ATK
-                else source.stat(Stat.DEF)
-                if dot.scaling is ScalingStat.DEF
-                else source.stat(Stat.MAX_HP)
-            )
-            base = dot.multiplier * ctx_scale * stacks
+            base = dot_base_per_stack(engine, source, unit, dot) * stacks
             level = source.level
             dmg_bonus = 0.0
         else:
@@ -346,6 +378,28 @@ def _decrement(engine, state, unit: Unit, timing: DurationTiming) -> None:
             expired.append(effect.effect_id)
     for effect_id in expired:
         remove_effect(engine, state, unit, effect_id, reason="지속시간 종료")
+        _on_expire(engine, state, unit, effect_id)
+
+
+def _on_expire(engine, state, unit: Unit, effect_id: str) -> None:
+    """효과가 끝날 때의 부수 효과.
+
+    빙결이 풀리면 다음 턴이 50% 앞당겨진다 (docs/mechanics.md 8.6).
+    효과별로 코드를 늘리지 않기 위해 정의의 `extra` 로 데이터화했다.
+    """
+    from . import scheduler
+
+    definition = STATUS_EFFECTS.try_get(effect_id)
+    if definition is None:
+        return
+    advance = float(definition.extra.get("expire_action_advance", 0.0))
+    if advance:
+        scheduler.modify_gauge(unit, advance=advance)
+        state.log.add(
+            state.elapsed_av, state.cycle, "status",
+            f"{unit.uid} {definition.name} 해제 -> 행동 {advance:.0%} 앞당김",
+            uid=unit.uid, effect_id=effect_id,
+        )
 
 
 def on_turn_start(engine, state, unit: Unit) -> None:

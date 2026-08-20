@@ -141,11 +141,19 @@ class RefreshPolicy(Enum):
 
 
 class ScalingStat(Enum):
-    """스킬 배율이 곱해지는 기준 스탯."""
+    """배율이 곱해지는 기준 값.
+
+    앞의 셋은 시전자의 스탯이다. 뒤의 둘은 격파 효과 전용이며
+    시전자 스탯이 아니라 다른 값을 기준으로 삼는다. docs/mechanics.md 8.6
+    """
 
     ATK = "atk"
     DEF = "def"
     MAX_HP = "max_hp"
+    #: 격파 기본 피해(공격자 레벨별 표). 연소/감전/풍화/빙결/얽힘
+    BREAK_BASE = "break_base"
+    #: **대상**의 최대 HP. 열상
+    TARGET_MAX_HP = "target_max_hp"
 
 
 class CritMode(Enum):

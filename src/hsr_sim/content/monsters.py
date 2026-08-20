@@ -197,6 +197,8 @@ def build_definition(
         ai_id=IMPORTED_AI_ID,
         skill_sequence=sequence,
         behavior_id="enemy_ai",
+        # 몬스터 등급. 열상 배율과 풍화 초기 중첩이 정예/보스 여부로 갈린다.
+        extra={"rank": monster.get("rank") or ""},
     )
 
 

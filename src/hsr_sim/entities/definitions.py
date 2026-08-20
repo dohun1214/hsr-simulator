@@ -140,6 +140,16 @@ class DotSpec:
     #: 배율에 중첩 수를 곱할지 여부
     per_stack: bool = True
 
+    # --- 격파 효과 전용 (docs/mechanics.md 8.6) ---
+    #: 대상이 정예/보스일 때 대신 쓰는 배율 (열상: 일반 0.16 / 정예·보스 0.07)
+    elite_multiplier: Optional[float] = None
+    #: 대상의 최대 인성치 배수(0.5 + 최대인성치/120)를 곱하는가 (얽힘)
+    use_toughness_multiplier: bool = False
+    #: 시전자의 격파 특효 (1 + BREAK_EFFECT) 를 곱하는가
+    use_break_effect: bool = False
+    #: 기본 피해 상한 (격파 기본 피해 x 최대 인성치 배수 단위). 열상만 사용
+    cap_break_multiplier: Optional[float] = None
+
 
 @dataclass(frozen=True)
 class StatusEffectDefinition:
